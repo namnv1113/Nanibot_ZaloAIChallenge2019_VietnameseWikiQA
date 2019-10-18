@@ -20,13 +20,21 @@ from __future__ import print_function
 
 import collections
 import os
-import modeling
-import tokenization
+import sys
 import tensorflow as tf
-from run_squad import model_fn_builder, input_fn_builder, convert_examples_to_features, SquadExample, FeatureWriter, get_final_text, _get_best_indexes, _compute_softmax, RawResult
+
+PACKAGE_PARENT = '..'
+SCRIPT_DIR = os.path.dirname(os.path.realpath(os.path.join(os.getcwd(), os.path.expanduser(__file__))))
+sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR, PACKAGE_PARENT)))
+
+from QASystem import modeling
+from QASystem import tokenization
+from QASystem.run_squad import model_fn_builder, input_fn_builder, convert_examples_to_features, SquadExample, \
+	FeatureWriter, get_final_text, _get_best_indexes, _compute_softmax, RawResult
 
 flags = tf.flags
 FLAGS = flags.FLAGS
+
 
 # Prediction model
 class Inference(object):
@@ -44,27 +52,19 @@ class Inference(object):
 	
 	def __init__(self, model):
 		# Define required variables
-
-		if (model == 'en'):
+		if model == 'en':
 			self.model = 'en'
-			bert_config_file = './model/base/bert_config.json'
-			vocab_file = './model/base/vocab.txt'
-			init_checkpoint = './model/base/bert_model.ckpt'
-			self.output_dir = './finetuned/eng'
-		elif (model == 'vi'):
+			bert_config_file = './QASystem/model/base/bert_config.json'
+			vocab_file = './QASystem/model/base/vocab.txt'
+			init_checkpoint = './QASystem/model/base/bert_model.ckpt'
+			self.output_dir = './QASystem/finetuned/eng'
+		elif model == 'vi':
 			self.model = 'vi'
-			bert_config_file = './model/multi_cased/bert_config.json'
-			vocab_file = './model/multi_cased/vocab.txt'
-			init_checkpoint = './model/multi_cased/bert_model.ckpt'
-			self.output_dir = './finetuned/vi'
-		elif (model == 'vi_uit'):
-			self.model = 'vi'
-			bert_config_file = './model/multi_cased/bert_config.json'
-			vocab_file = './model/multi_cased/vocab.txt'
-			init_checkpoint = './model/multi_cased/bert_model.ckpt'
-			self.output_dir = './finetuned/vi_uit'
-		
-		
+			bert_config_file = './QASystem/model/multi_cased/bert_config.json'
+			vocab_file = './QASystem/model/multi_cased/vocab.txt'
+			init_checkpoint = './QASystem/model/multi_cased/bert_model.ckpt'
+			self.output_dir = './QASystem/finetuned/vi'
+
 		# Set up model for prediction
 		tf.logging.set_verbosity(tf.logging.INFO)
 		bert_config = modeling.BertConfig.from_json_file(bert_config_file)
@@ -109,7 +109,7 @@ class Inference(object):
 	def process_example(self, data):
 		"""Create a SquadExample from the paragraph and question"""
 		def is_whitespace(c):
-			return (c == " " or c == "\t" or c == "\r" or c == "\n" or ord(c) == 0x202F)
+			return c == " " or c == "\t" or c == "\r" or c == "\n" or ord(c) == 0x202F
 		qas_id = 0
 		examples = []
 		for temp in data:

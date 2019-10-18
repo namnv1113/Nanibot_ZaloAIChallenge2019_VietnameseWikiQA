@@ -18,17 +18,20 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+import sys
 import collections
 import json
-import math
-import os
-import random
-import modeling
-import optimization
-import tokenization
-import six
 import tensorflow as tf
-from run_squad import model_fn_builder, input_fn_builder, SquadExample, FeatureWriter, get_final_text, _get_best_indexes, _compute_softmax, RawResult, read_squad_examples, convert_examples_to_features
+
+PACKAGE_PARENT = '..'
+SCRIPT_DIR = os.path.dirname(os.path.realpath(os.path.join(os.getcwd(), os.path.expanduser(__file__))))
+sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR, PACKAGE_PARENT)))
+
+from QASystem import modeling
+from QASystem import tokenization
+from QASystem.run_squad import model_fn_builder, input_fn_builder, FeatureWriter, _compute_softmax, RawResult, \
+	read_squad_examples, convert_examples_to_features
 
 flags = tf.flags
 
