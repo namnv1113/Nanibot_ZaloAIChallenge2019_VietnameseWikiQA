@@ -1,3 +1,4 @@
 tensorflow-gpu==1.11
 flask
 flask-session
+matplotlib
