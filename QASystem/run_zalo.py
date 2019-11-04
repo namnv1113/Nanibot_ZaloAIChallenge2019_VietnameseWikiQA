@@ -100,14 +100,13 @@ def main(_):
         train_file=train_file if (FLAGS.mode.lower() == 'train') else None,
         evaluation_file=dev_file,
         zalo_prediction_output_path=FLAGS.zalo_predict_csv_file,
-        encoding=FLAGS.encoding
+        encoding=FLAGS.encoding,
     )
 
     if FLAGS.mode.lower() == 'train':
         print('[Main] Begin training')
-        model.train()
-        print('[Main] Training complete. Begin evaluation')
-        eval_result = model.eval()
+        eval_result = model.train_and_eval()
+        print('[Main] Training complete.')
         print('[Main] Evaluation complete')
         print("Accuracy: {}%".format(eval_result['accuracy'] * 100))
         print("Loss: {}".format(eval_result['loss']))
