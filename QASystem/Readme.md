@@ -5,62 +5,54 @@
 	* flask
 	* tensorflow==1.11 (or tensorflow-gpu==1.11)
 
-This system required 2 pre-training models: the *base* (BERT-Base, Uncased) model for English BERT demonstration and the *multi_cased* (BERT-Base, Multilingual Cased) model for Vietnamese tasks, which are stored in the `model` folder. Note that I didn't include the pretraining code for the BERT model, but if you want to pre-train your model, you can follow the instructions in this [link](https://github.com/google-research/bert#pre-training-with-bert). The model can be download in the [BERT github page](https://github.com/google-research/bert#pre-trained-models). 
+## How to run
+This system required a **multilingual pre-training model**: the *multi_cased* (BERT-Base, Multilingual Cased) model for Vietnamese NLP tasks, which are stored in the `model` folder. Note that I didn't include the pretraining code for the BERT model, but if you want to pre-train your model, you can follow the instructions in this [link](https://github.com/google-research/bert#pre-training-with-bert). The model can be download in the [BERT github page](https://github.com/google-research/bert#pre-trained-models). 
 
-**Two fine-tuned models** are used: the *eng* model for English machine comprehension task SQuAD, and the *vi* model for Vietnamese reading comprehension task on SQuAD. Since these 2 files are too large to stored in the CD, please download the fine-tuned model from this [link](https://drive.google.com/drive/folders/1g-9IJdYlelUSR2DHh9AEqVnPfqddoIhs?usp=sharing) and put them in the `finetuned` folder.
 
-To run the fine-tuning or predicting:
+To run the model:
 ```sh
-BERT_BASE_DIR='./model/multi_cased'
-SQUAD_DIR='./squad/squad_vi'
-OUT_DIR='./finetuned/vi/'
+BERT_BASE_PATH='./model/multi_cased'
+DATASET_PATH='../dataset/'
+OUT_DIR='./finetuned/classifier/'
 
-!python run_squad.py \
-  --vocab_file=$BERT_BASE_DIR/vocab.txt \
-  --bert_config_file=$BERT_BASE_DIR/bert_config.json \
-  --init_checkpoint=$BERT_BASE_DIR/bert_model.ckpt \
-  --do_train=True \
-  --do_predict=True \
-  --train_file=$SQUAD_DIR/<train_file> \
-  --predict_file=$SQUAD_DIR/<test_file> \
+!python run_zalo.py \
+  --mode [train/eval/predict_test/predict_manual] \
+  --train_display_info [True/False] \ 
+  --dataset_path $DATASET_PATH \
+  --bert_model_path $BERT_BASE_PATH \
+  --model_path $OUT_DIR \
+  --max_seq_length=128 \
   --do_lower_case=False \
-  --train_batch_size=8 \
-  --learning_rate=3e-5 \
-  --num_train_epochs=5.0 \
-  --max_seq_length=384 \
-  --doc_stride=128 \
-  --max_answer_length=500 \
-  --output_dir=$OUT_DIR
-```
-Where 
-* *BERT_BASE_DIR* is the folder contains the pre-trained model (stored in the *model* folder)
-* *SQUAD_DIR* is the folder contains the dataset (stored in the *dataset* folder)
-* *OUT_DIR* is the the location to output the fine-tuned model
-
-Include this if TPU is used
-```sh
-   --use_tpu=True \
-   --tpu_name=$TPU_NAME
+  --model_learning_rate=2e-5 \
+  --model_batch_size=8 \
+  --train_epochs=1 \
+  --train_dropout_rate 0.1 \
+  --bert_warmup_proportion 0.1 \
+  --save_checkpoint_steps 500 \
+  --save_summary_steps 100 \
+  --keep_checkpoint_max 1 \
+  --encoding utf-8 \
+  --zalo_predict_csv_file ./zalo.csv \
 ```
 
-To evaluate (after predicting - prediction.json will be generated in $OUT_DIR) 
-```sh
-python evaluate.py $SQUAD_DIR/<test_file> <prediction_file>
-```
+Required parameters:
+ - `--mode` Which mode to you want to run the model (*'train'* for training, *'eval'* for development set evaluation, *'predict_test'* for test set predicting & *'predict_manual'* for manual testing)
+ - `--dataset_path` The path directory that store the required dataset (note that *train.json* & *test.json* with Zalo format or its preprocessed tfrecords file must be contained in that folder)
+ - `--bert_model_path` The path to the pretrained BERT model
+ - `--model_path` The location where the fine-tuned model should be stored
 
-To return a scores.json file that is used for translated SQuAD filtering, first fine-tune BERT on the handcraft dataset only (*train.json* in the *dataset* folder), then set the appropiate output folder to the location where the model is stored and run the following command.
-```sh
-BERT_BASE_DIR='./model/multi_cased'
-SQUAD_DIR='./squad/squad_vi'
-OUT_DIR='./finetuned/vi/'
+Optional parameters
+ - `--train_display_info` Should logging information be hidden during training? (Default is *True*)
+ - `--max_sequence_len` The maximum input sequence length for embeddings (Default is *384*)
+ - `--do_lowercase` Should the input text be lowercased (this should be the same as the `do_lowercase` settings in the BERT pretrained model)
+ - `--model_learning_rate` The default model learning rate (Default is *2e-5*)
+ - `--model_batch_size` Training batch size (Default is *8*)
+ - `--train_epochs` Number of loops to train the whole dataset (Default is *1*)
+ - `--train_dropout_rate` Default dropout rate (Default is *0.1*)
+ - `--bert_warmup_proportion` Proportion of training to perform linear learning rate warmup (Default is *0.1*)
+ - `--save_checkpoint_steps` The number of steps between each checkpoint save (Default is *500*)
+ - `--save_summary_steps` The number of steps between each summary write (Default is *100*)
+ - `--keep_checkpoint_max` The maximum number of checkpoints to keep (Default is *1*)
+ - `--encoding` The default encoding used in the training dataset (Default set to *utf-8*)
+ - `--zalo_predict_csv_file` Destination for the Zalo submission predict file during *predict_test* ((Default is *./zalo.csv*))
 
-!python filter_squad.py \
-  --vocab_file=$BERT_BASE_DIR/vocab.txt \
-  --bert_config_file=$BERT_BASE_DIR/bert_config.json \
-  --init_checkpoint=$BERT_BASE_DIR/bert_model.ckpt \
-  --do_train=False \
-  --do_predict=True \
-  --predict_file=$SQUAD_DIR/train_translated_squad.json \
-  --do_lower_case=False \
-  --output_dir=$OUT_DIR
-```

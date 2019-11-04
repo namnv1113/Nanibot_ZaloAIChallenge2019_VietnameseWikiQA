@@ -4,7 +4,7 @@
 import json
 import copy
 import re
-from google.cloud import translate      # Imports the Google Cloud client library
+from google.cloud import translate  # Imports the Google Cloud client library
 import time
 import html
 import sys
@@ -12,12 +12,13 @@ import signal
 from tqdm import tqdm
 import argparse
 
-#region Configuration
+# region Configuration
 # Configuration
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-in','--input_file', default = "", help='SQuAD-format file that need to be translated', required=True)
-parser.add_argument('-out','--output_file', default = "", help='Output file', required=True)
+parser.add_argument('-in', '--input_file', default="", help='SQuAD-format file that need to be translated',
+                    required=True)
+parser.add_argument('-out', '--output_file', default="", help='Output file', required=True)
 args = parser.parse_args()
 
 error_file = 'error.txt'
@@ -34,23 +35,27 @@ pattern = r'\$\$\$.*?\$\$\$'
 article_progress_idx = 0
 paragraph_progress_idx = 0
 
-translated_data = {'paragraphs':[]}
-#endregion
+translated_data = {'paragraphs': []}
 
 
-#region Functions
+# endregion
+
+
+# region Functions
 def signal_handler(sig, frame):
     print('You pressed Ctrl+C! Save current progress...')
     save()
     print("Exiting...")
     sys.exit(0)
 
+
 def save():
-    with open(file_output, "w", encoding=encode) as json_file:    
+    with open(file_output, "w", encoding=encode) as json_file:
         json.dump(translated_data, json_file, ensure_ascii=False)
 
-    with open(progress_file, "w", encoding = encode) as json_file:
+    with open(progress_file, "w", encoding=encode) as json_file:
         json.dump({'article_progress': article_progress_idx, 'paragraph_progress': paragraph_progress_idx}, json_file)
+
 
 def translate_func(client, text, target_lang='vi'):
     try:
@@ -70,15 +75,16 @@ def translate_func(client, text, target_lang='vi'):
             sys.exit(0)
     return html.unescape(text)
 
+
 def add_info(context, ans_list):
     """ Add information to a text paragraph """
     # Split the paragragph into multiple sentences
     # Sentences structured
     # sentences = {'idx' : {start, end}, 'ans' : [{ques_id, ans_start, ans_end}], 'text' : sentence, 'org_sen_idx' : -1}
     sentences = context.split('.')
-    if sentences[-1].isspace():     # If the last sentence is empty (due to the end '.')
+    if sentences[-1].isspace():  # If the last sentence is empty (due to the end '.')
         sentences.pop()
-    sentences = [{'idx' : {}, 'ans' : [], 'text' : sentence, 'org_sen_idx' : -1} for sentence in sentences]
+    sentences = [{'idx': {}, 'ans': [], 'text': sentence, 'org_sen_idx': -1} for sentence in sentences]
     for i in range(len(sentences)):
         sentences[i]['idx']['start'] = context.find(sentences[i]['text'])
         sentences[i]['idx']['end'] = sentences[i]['idx']['start'] + len(sentences[i]['text'])
@@ -99,31 +105,33 @@ def add_info(context, ans_list):
             sentence_curr += 1
 
         if (sentence_curr >= len(sentences)):
-            break   # Ignore question with unknown start/end posisiton (that exceed max len)
+            break  # Ignore question with unknown start/end posisiton (that exceed max len)
 
         if len(sentences[sentence_curr]['ans']) == 0:
             sentences[sentence_curr]['ans'].append(ans_list[i])
-        elif is_same_answer_span(sentences[sentence_curr]['ans'][-1]['ans_start'], 
+        elif is_same_answer_span(sentences[sentence_curr]['ans'][-1]['ans_start'],
                                  sentences[sentence_curr]['ans'][-1]['ans_end'],
                                  ans_list[i]['ans_start'],
                                  ans_list[i]['ans_end']):
             sentences[sentence_curr]['ans'][-1]['ques_id'] += answer_splitter + ans_list[i]['ques_id']
-        elif  is_override_answer_span(sentences[sentence_curr]['ans'][-1]['ans_start'],
-                                      sentences[sentence_curr]['ans'][-1]['ans_end'],
-                                      ans_list[i]['ans_start']):
+        elif is_override_answer_span(sentences[sentence_curr]['ans'][-1]['ans_start'],
+                                     sentences[sentence_curr]['ans'][-1]['ans_end'],
+                                     ans_list[i]['ans_start']):
             # Loop over (possible) copy version of this sentence to find whether in that sentence
             # is the answer spans override each others?
-            dupicate_sentence_idxs = [i for i, sentence in enumerate(sentences) if sentence['org_sen_idx'] == sentence_curr]
+            dupicate_sentence_idxs = [i for i, sentence in enumerate(sentences) if
+                                      sentence['org_sen_idx'] == sentence_curr]
             alternative_found = False
             for idx in dupicate_sentence_idxs:
                 sentence = sentences[idx]
-                override_answers = [x for x in sentence['ans'] if is_override_answer_span(x['ans_start'], x['ans_end'], ans_list[i]['ans_start']) ]
+                override_answers = [x for x in sentence['ans'] if
+                                    is_override_answer_span(x['ans_start'], x['ans_end'], ans_list[i]['ans_start'])]
                 if len(override_answers) == 0:  # No override span found
                     sentences[idx]['ans'].append(ans_list[i])
                     alternative_found = True
                     break
             # No possible duplicated sentences (if have) where span not overrided --> Create new
-            if not alternative_found:    
+            if not alternative_found:
                 copied_sentence = copy.deepcopy(sentences[sentence_curr])
                 copied_sentence['ans'] = [ans_list[i]]
                 copied_sentence['org_sen'] = sentence_curr
@@ -144,18 +152,21 @@ def add_info(context, ans_list):
             while end_idx < len(sentence['text']) and not sentence['text'][end_idx].isspace():
                 end_idx += 1
 
-            sentences[i]['text'] = sentences[i]['text'][:start_idx] + answer_indicator + answer['ques_id'] + answer_splitter + " " + sentences[i]['text'][start_idx:end_idx] + " " + answer_indicator + sentences[i]['text'][end_idx:]
+            sentences[i]['text'] = sentences[i]['text'][:start_idx] + answer_indicator + answer[
+                'ques_id'] + answer_splitter + " " + sentences[i]['text'][start_idx:end_idx] + " " + answer_indicator + \
+                                   sentences[i]['text'][end_idx:]
 
         sentences[i]['text'] = sentences[i]['text'].strip()
         new_cotext += sentences[i]['text'] + ". "
 
     return new_cotext
 
+
 def load_progress():
     global article_progress_idx
     global paragraph_progress_idx
     global translated_data
-    
+
     try:
         with open(progress_file, 'r', encoding=encode) as file:
             progress = json.load(file)
@@ -165,14 +176,16 @@ def load_progress():
         pass
 
     try:
-        with open(file_output, "r", encoding=encode) as json_file:    
+        with open(file_output, "r", encoding=encode) as json_file:
             translated_data = json.load(json_file)
     except FileNotFoundError:
         pass
-#endregion
 
 
-#region Main
+# endregion
+
+
+# region Main
 if __name__ == "__main__":
     file_input = args.input_file
     file_output = args.output_file
@@ -182,7 +195,7 @@ if __name__ == "__main__":
     # Start translating
     print('Begin translating...')
     print('Opening file...')
-    with open(file_input, encoding=encode) as data_file:    
+    with open(file_input, encoding=encode) as data_file:
         data = json.load(data_file)
 
     print('Load previous progress')
@@ -200,7 +213,7 @@ if __name__ == "__main__":
             context = paragraph['context']
             answer_list = []
             questions = {}
-            
+
             # Loop for each qa pairs
             for pair in paragraph['qas']:
                 # Get answer and id
@@ -209,24 +222,25 @@ if __name__ == "__main__":
                 ans_start = pair['answers'][0]['answer_start']
 
                 # Translate the question, add to new dictionary for future use
-                questions[id] = translate_func(translate_client, pair['question']) 
-                answer_list.append({'ques_id' : id, 'ans_start' : ans_start, 'ans_end' : ans_start + len(answer)})
+                questions[id] = translate_func(translate_client, pair['question'])
+                answer_list.append({'ques_id': id, 'ans_start': ans_start, 'ans_end': ans_start + len(answer)})
 
             context = add_info(context, answer_list)
-            
+
             qas = []
             context = translate_func(translate_client, context)
 
             translated_answerlist = re.findall(pattern, context)
-            
+
             # Preprocess translated paragraph and retrieve original answer
             for answer_info in translated_answerlist:
 
-                context_idx = context.find(answer_info)    # Get answer_start position in paragraph
-                _answer_info = answer_info    # Temp variable for later use
-                answer_info = answer_info[len(answer_indicator):-len(answer_indicator)]   # Remove the answer start and end indicator
-                answer_info = answer_info.split(answer_splitter)     
-                real_answer = answer_info.pop().strip()   # Get answer
+                context_idx = context.find(answer_info)  # Get answer_start position in paragraph
+                _answer_info = answer_info  # Temp variable for later use
+                answer_info = answer_info[
+                              len(answer_indicator):-len(answer_indicator)]  # Remove the answer start and end indicator
+                answer_info = answer_info.split(answer_splitter)
+                real_answer = answer_info.pop().strip()  # Get answer
 
                 for question_id in answer_info:
                     new_qdict = {}
@@ -236,16 +250,19 @@ if __name__ == "__main__":
                         new_qdict['question'] = questions[new_qdict['id']]
                     except:
                         with open(error_file, "a+", encoding=encode) as err_file:
-                            err_file.write('At article {}, paragarph {}: Cant find question id {}\n'.format(article_progress_idx, paragraph_progress_idx, new_qdict['id']))
+                            err_file.write(
+                                'At article {}, paragarph {}: Cant find question id {}\n'.format(article_progress_idx,
+                                                                                                 paragraph_progress_idx,
+                                                                                                 new_qdict['id']))
                         continue
 
-                    new_qdict['answers'] = [{'text':real_answer, 'answer_start':context_idx}]
+                    new_qdict['answers'] = [{'text': real_answer, 'answer_start': context_idx}]
                     qas.append(new_qdict)
 
                 context = context.replace(_answer_info, real_answer)
 
-            translated_data['paragraphs'].append({'context':context, 'qas':qas})
+            translated_data['paragraphs'].append({'context': context, 'qas': qas})
 
     save()
     print('Translate complete!')
-#endregion
+# endregion

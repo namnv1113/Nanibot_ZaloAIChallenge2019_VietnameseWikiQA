@@ -57,11 +57,15 @@ class BertClassifierModel(object):
 
         # Specify training steps
         if self.train_file:
-            self.num_train_steps = int(sum(1 for _ in tf.python_io.tf_record_iterator(train_file)) /
-                                       self.batch_size * self.epochs)
+            self.num_train_steps = int(sum(1 for _ in tf.python_io.tf_record_iterator(train_file))
+                                       / self.batch_size * self.epochs)
             # self.num_train_steps = int(sum(1 for _ in tf.data.TFRecordDataset(train_file)) /
             #                            self.batch_size * self.epochs)
             self.num_warmup_steps = int(self.num_train_steps * warmup_proportion)
+
+        if self.evaluation_file:
+            self.num_eval_steps = int(sum(1 for _ in tf.python_io.tf_record_iterator(evaluation_file))
+                                      / self.batch_size)
 
         # Create the Estimator
         self.classifier = tf.estimator.Estimator(model_fn=self.model_fn_builder(),
@@ -313,6 +317,7 @@ class BertClassifierModel(object):
 
         eval_spec = tf.estimator.EvalSpec(
             input_fn=eval_input_fn,
+            steps=self.num_eval_steps,
         )
 
         tf.estimator.train_and_evaluate(self.classifier, train_spec, eval_spec)

@@ -18,7 +18,7 @@ flags.DEFINE_string("bert_model_path", None,
 flags.DEFINE_string("model_path", None,
                     "Default path to store the trained model")
 
-flags.DEFINE_integer("max_sequence_len", 128,
+flags.DEFINE_integer("max_sequence_len", 384,
                      "The maximum input sequence length for embeddings")
 flags.DEFINE_bool("do_lowercase", False,
                   "Whether to lower case the input text. Should be True for uncased "
@@ -48,7 +48,7 @@ flags.DEFINE_string("zalo_predict_csv_file", "./zalo.csv",
 
 
 def main(_):
-    # tf.logging.set_verbosity(tf.logging.info if FLAGS.train_display_info else tf.logging.FATAL)
+    tf.logging.set_verbosity(tf.logging.info if FLAGS.train_display_info else tf.logging.FATAL)
 
     print("[Main] Starting....")
 
