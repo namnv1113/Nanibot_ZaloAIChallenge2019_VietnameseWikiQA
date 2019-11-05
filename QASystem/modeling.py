@@ -9,7 +9,8 @@ class BertClassifierModel(object):
     def __init__(self, max_sequence_len, label_list,
                  learning_rate, batch_size, epochs, dropout_rate, warmup_proportion,
                  model_dir, save_checkpoint_steps, save_summary_steps, keep_checkpoint_max, bert_model_path, tokenizer,
-                 train_file=None, evaluation_file=None, zalo_prediction_output_path=None, encoding='utf-8'):
+                 train_file=None, evaluation_file=None,
+                 zalo_prediction_output_path=None, encoding='utf-8'):
         """ Constructor for TextCNN
             Parameters:
                 max_sequence_len (int): Maximum length of input sequence
@@ -56,11 +57,15 @@ class BertClassifierModel(object):
 
         # Specify training steps
         if self.train_file:
-            self.num_train_steps = int(sum(1 for _ in tf.python_io.tf_record_iterator(train_file)) /
-                                       self.batch_size * self.epochs)
+            self.num_train_steps = int(sum(1 for _ in tf.python_io.tf_record_iterator(train_file))
+                                       / self.batch_size * self.epochs)
             # self.num_train_steps = int(sum(1 for _ in tf.data.TFRecordDataset(train_file)) /
             #                            self.batch_size * self.epochs)
             self.num_warmup_steps = int(self.num_train_steps * warmup_proportion)
+
+        if self.evaluation_file:
+            self.num_eval_steps = int(sum(1 for _ in tf.python_io.tf_record_iterator(evaluation_file))
+                                      / self.batch_size)
 
         # Create the Estimator
         self.classifier = tf.estimator.Estimator(model_fn=self.model_fn_builder(),
@@ -145,16 +150,12 @@ class BertClassifierModel(object):
             elif mode == tf.estimator.ModeKeys.EVAL:
                 def metric_fn(label_ids, predicted_labels, is_real_example):
                     """ Calculate evaluation metrics  """
-                    accuracy = tf.metrics.accuracy(labels=label_ids,
-                                                   predictions=predicted_labels,
-                                                   weights=is_real_example)
+                    accuracy = tf.compat.v1.metrics.accuracy(labels=label_ids,
+                                                             predictions=predicted_labels,
+                                                             weights=is_real_example)
                     f1_score = tf.contrib.metrics.f1_score(label_ids, predicted_labels)
-                    recall = tf.metrics.recall(
-                        label_ids,
-                        predicted_labels)
-                    precision = tf.metrics.precision(
-                        label_ids,
-                        predicted_labels)
+                    recall = tf.compat.v1.metrics.recall(label_ids, predicted_labels)
+                    precision = tf.compat.v1.metrics.precision(label_ids, predicted_labels)
                     return {
                         "accuracy": accuracy,
                         "f1_score": f1_score,
@@ -219,7 +220,7 @@ class BertClassifierModel(object):
                 d = d.repeat()
                 d = d.shuffle(buffer_size=100)
 
-            d = d.map(map_func=lambda record: _decode_record(record, name_to_features))\
+            d = d.map(map_func=lambda record: _decode_record(record, name_to_features)) \
                 .batch(batch_size=batch_size, drop_remainder=drop_remainder)
 
             return d
@@ -277,7 +278,7 @@ class BertClassifierModel(object):
         return input_fn
 
     def train(self):
-        """ Training data based on predefined training record (train set) """
+        """ Training model based on predefined training record (train set) """
         if not self.train_file:
             return
 
@@ -288,6 +289,39 @@ class BertClassifierModel(object):
         )
 
         self.classifier.train(input_fn=train_input_fn, max_steps=self.num_train_steps)
+
+    def train_and_eval(self):
+        """ Training & evaluate model
+            Return
+                eval_results (dictionary): Evaluation results (accuracy, f1, precision & recall)
+        """
+        if not self.train_file or not self.evaluation_file:
+            return
+
+        train_input_fn = self._file_based_input_fn_builder(
+            input_file=self.train_file,
+            is_training=True,
+            drop_remainder=True
+        )
+
+        eval_input_fn = self._file_based_input_fn_builder(
+            input_file=self.evaluation_file,
+            is_training=False,
+            drop_remainder=False
+        )
+
+        train_spec = tf.estimator.TrainSpec(
+            input_fn=train_input_fn,
+            max_steps=self.num_train_steps,
+        )
+
+        eval_spec = tf.estimator.EvalSpec(
+            input_fn=eval_input_fn,
+            steps=self.num_eval_steps,
+        )
+
+        tf.estimator.train_and_evaluate(self.classifier, train_spec, eval_spec)
+        return self.eval()
 
     def eval(self):
         """ Evaluate model based on predefined evaluation record (test set)

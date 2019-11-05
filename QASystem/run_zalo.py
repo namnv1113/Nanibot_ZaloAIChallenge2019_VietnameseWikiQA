@@ -18,7 +18,7 @@ flags.DEFINE_string("bert_model_path", None,
 flags.DEFINE_string("model_path", None,
                     "Default path to store the trained model")
 
-flags.DEFINE_integer("max_sequence_len", 128,
+flags.DEFINE_integer("max_sequence_len", 384,
                      "The maximum input sequence length for embeddings")
 flags.DEFINE_bool("do_lowercase", False,
                   "Whether to lower case the input text. Should be True for uncased "
@@ -48,7 +48,7 @@ flags.DEFINE_string("zalo_predict_csv_file", "./zalo.csv",
 
 
 def main(_):
-    # tf.logging.set_verbosity(tf.logging.info if FLAGS.train_display_info else tf.logging.FATAL)
+    tf.logging.set_verbosity(tf.logging.info if FLAGS.train_display_info else tf.logging.FATAL)
 
     print("[Main] Starting....")
 
@@ -100,14 +100,13 @@ def main(_):
         train_file=train_file if (FLAGS.mode.lower() == 'train') else None,
         evaluation_file=dev_file,
         zalo_prediction_output_path=FLAGS.zalo_predict_csv_file,
-        encoding=FLAGS.encoding
+        encoding=FLAGS.encoding,
     )
 
     if FLAGS.mode.lower() == 'train':
         print('[Main] Begin training')
-        model.train()
-        print('[Main] Training complete. Begin evaluation')
-        eval_result = model.eval()
+        eval_result = model.train_and_eval()
+        print('[Main] Training complete.')
         print('[Main] Evaluation complete')
         print("Accuracy: {}%".format(eval_result['accuracy'] * 100))
         print("Loss: {}".format(eval_result['loss']))
