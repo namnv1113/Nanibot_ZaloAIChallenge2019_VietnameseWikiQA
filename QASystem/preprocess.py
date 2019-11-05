@@ -2,8 +2,8 @@ from tqdm import tqdm
 from os.path import join
 import json
 import collections
-from sklearn.model_selection import train_test_split
 import tensorflow as tf
+import random
 
 
 class InputExample(object):
@@ -94,15 +94,18 @@ class ZaloDatasetProcessor(object):
 
             # Divide into train set and dev set while maintain label ratio in each set
             if self.force_data_balance:
-                min_label_data_size = min([len([data for data in train_data_formatted if data.label == label])]
-                                          for label in self.label_list)
+                min_label_data_size = min([len([data for data in train_data_formatted if data.label == label])
+                                           for label in self.label_list])
             for label in self.label_list:
                 train_data_by_label = [data for data in train_data_formatted if data.label == label]
                 if self.force_data_balance:
                     train_data_by_label = train_data_by_label[0:min_label_data_size]
-                _train_data, _dev_data = train_test_split(train_data_by_label, shuffle=True, test_size=self.dev_size)
-                self.train_data.extend(_train_data)
-                self.dev_data.extend(_dev_data)
+                random.shuffle(train_data_by_label)
+                _split_location = int(len(train_data_by_label) * self.dev_size)
+                self.dev_data.extend(train_data_by_label[0:_split_location])
+                self.train_data.extend(train_data_by_label[_split_location:-1])
+            random.shuffle(self.train_data)
+            random.shuffle(self.dev_data)
 
         with open(join(dataset_path, test_filepath), 'r', encoding=encode) as test_file:
             # Get test data

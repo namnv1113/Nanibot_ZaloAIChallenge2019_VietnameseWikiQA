@@ -1,5 +1,4 @@
 tensorflow-gpu==1.11
 matplotlib
 tqdm
-scikit-learn
 pandas
