@@ -62,10 +62,17 @@ class ZaloDatasetProcessor(object):
     """ Base class to process & store input data for the Zalo AI Challenge dataset"""
     label_list = ['False', 'True']
 
-    def __init__(self):
+    def __init__(self, dev_size=0.2, force_data_balance=False):
+        """
+        Parameters:
+            dev_size: The size of the development set taken from the training set
+            force_data_balance: Balance training data by truncate training instance whose label is overwhelming
+        """
         self.train_data = []
         self.dev_data = []
         self.test_data = []
+        self.dev_size = dev_size
+        self.force_data_balance = force_data_balance
 
     def load_from_path(self, dataset_path, encode='utf-8', train_filepath='train.json', test_filepath='test.json'):
         """
@@ -74,6 +81,7 @@ class ZaloDatasetProcessor(object):
             Need to be called before preprocess(before write_all_to_tfrecords) is called
         """
         with open(join(dataset_path, train_filepath), 'r', encoding=encode) as train_file:
+            # Get train data
             train_data = json.load(train_file)
             train_data_formatted = []
             train_data_formatted.extend(
@@ -83,9 +91,21 @@ class ZaloDatasetProcessor(object):
                              text=data_instance['text'],
                              label=self.label_list[data_instance['label']]) for data_instance in tqdm(train_data)
             )
-            self.train_data, self.dev_data = train_test_split(train_data_formatted, shuffle=True, test_size=0.2)
+
+            # Divide into train set and dev set while maintain label ratio in each set
+            if self.force_data_balance:
+                min_label_data_size = min([len([data for data in train_data_formatted if data.label == label])]
+                                          for label in self.label_list)
+            for label in self.label_list:
+                train_data_by_label = [data for data in train_data_formatted if data.label == label]
+                if self.force_data_balance:
+                    train_data_by_label = train_data_by_label[0:min_label_data_size]
+                _train_data, _dev_data = train_test_split(train_data_by_label, shuffle=True, test_size=self.dev_size)
+                self.train_data.extend(_train_data)
+                self.dev_data.extend(_dev_data)
 
         with open(join(dataset_path, test_filepath), 'r', encoding=encode) as test_file:
+            # Get test data
             test_data = json.load(test_file)
             for data_instance in tqdm(test_data):
                 self.test_data.extend(

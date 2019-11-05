@@ -45,10 +45,14 @@ flags.DEFINE_string("encoding", "utf-8",
                     "Encoding used in the dataset")
 flags.DEFINE_string("zalo_predict_csv_file", "./zalo.csv",
                     "Destination for the Zalo submission predict file")
+flags.DEFINE_float("dev_size", 0.2,
+                   "The size of the development set taken from the training set")
+flags.DEFINE_bool("force_data_balance", False,
+                  "Balance training data by truncate training instance whose label is overwhelming")
 
 
 def main(_):
-    tf.logging.set_verbosity(tf.logging.info if FLAGS.train_display_info else tf.logging.FATAL)
+    # tf.logging.set_verbosity(tf.logging.info if FLAGS.train_display_info else tf.logging.FATAL)
 
     print("[Main] Starting....")
 
@@ -74,7 +78,7 @@ def main(_):
 
     if not is_preprocessed():
         print('[Main] No preprocess data found. Begin preprocess')
-        dataset_processor = ZaloDatasetProcessor()
+        dataset_processor = ZaloDatasetProcessor(dev_size=FLAGS.dev_size, force_data_balance=FLAGS.force_data_balance)
         dataset_processor.load_from_path(encode=FLAGS.encoding, dataset_path=FLAGS.dataset_path)
         dataset_processor.write_all_to_tfrecords(encoding=FLAGS.encoding,
                                                  output_folder=FLAGS.dataset_path,
