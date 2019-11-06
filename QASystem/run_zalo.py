@@ -43,6 +43,8 @@ flags.DEFINE_string("encoding", "utf-8",
                     "Encoding used in the dataset")
 flags.DEFINE_string("zalo_predict_csv_file", "./zalo.csv",
                     "Destination for the Zalo submission predict file")
+flags.DEFINE_string("eval_predict_csv_file", "./eval.csv",
+                    "Destination for the development set predict file (None if no output is required)")
 flags.DEFINE_float("dev_size", 0.2,
                    "The size of the development set taken from the training set")
 flags.DEFINE_bool("force_data_balance", False,
@@ -99,7 +101,6 @@ def main(_):
         tokenizer=tokenier,
         train_file=train_file if (FLAGS.mode.lower() == 'train') else None,
         evaluation_file=dev_file,
-        zalo_prediction_output_path=FLAGS.zalo_predict_csv_file,
         encoding=FLAGS.encoding,
     )
 
@@ -114,6 +115,10 @@ def main(_):
         print("F1 Score: {}".format(eval_result['f1_score'] * 100))
         print("Recall: {}%".format(eval_result['recall'] * 100))
         print("Precision: {}%".format(eval_result['precision'] * 100))
+        if FLAGS.eval_predict_csv_file is not None:
+            print('[Main] Development set predict and output to file')
+            _ = model.predict_from_eval_file(test_file=dev_file, output_file=FLAGS.eval_predict_csv_file,
+                                             file_output_mode='full')
     elif FLAGS.mode.lower() == 'eval':
         eval_result = model.eval()
         print('[Main] Evaluation complete')
@@ -122,6 +127,10 @@ def main(_):
         print("F1 Score: {}".format(eval_result['f1_score'] * 100))
         print("Recall: {}%".format(eval_result['recall'] * 100))
         print("Precision: {}%".format(eval_result['precision'] * 100))
+        if FLAGS.eval_predict_csv_file is not None:
+            print('[Main] Development set predict and output to file')
+            _ = model.predict_from_eval_file(test_file=dev_file, output_file=FLAGS.eval_predict_csv_file,
+                                             file_output_mode='full')
     elif FLAGS.mode.lower() == 'predict_test':
         print("[Main] Begin Predict based on Test file")
         results = model.predict_from_eval_file(test_file=test_file, output_file=FLAGS.zalo_predict_csv_file)

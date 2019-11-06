@@ -17,25 +17,9 @@ OUT_DIR='./finetuned/classifier/'
 
 !python run_zalo.py \
     --mode [train/eval/predict_test/predict_manual] \
-    --train_display_info [True/False] \ 
     --dataset_path $DATASET_PATH \
     --bert_model_path $BERT_BASE_PATH \
     --model_path $OUT_DIR \
-    --max_seq_length=128 \
-    --do_lower_case=False \
-    --model_learning_rate=2e-5 \
-    --model_batch_size=8 \
-    --train_epochs=1 \
-    --train_dropout_rate 0.1 \
-    --bert_warmup_proportion 0.1 \
-    --l2_regularization_lambda 0.01 \
-    --save_checkpoint_steps 500 \
-    --save_summary_steps 100 \
-    --keep_checkpoint_max 1 \
-    --encoding utf-8 \
-    --zalo_predict_csv_file ./zalo.csv \
-    --dev_size 0.2 \
-    --force_data_balance False
 ```
 
 Required parameters:
@@ -58,6 +42,8 @@ Optional parameters
     - `--keep_checkpoint_max` The maximum number of checkpoints to keep (Default is *1*)
     - `--encoding` The default encoding used in the training dataset (Default set to *utf-8*)
     - `--zalo_predict_csv_file` Destination for the Zalo submission predict file during *predict_test* (Default is *./zalo.csv*)
+    - `--eval_predict_csv_file` Destination for the development set predict file durting *train* and *eval* (Default is *None*)
     - `--dev_size` The size of the development set taken from the training set (Default is *0.2*)
     - `--force_data_balance` Balance training data by truncate training instance whose label is overwhelming (Default is *False*)
+    
 

@@ -9,8 +9,7 @@ class BertClassifierModel(object):
     def __init__(self, max_sequence_len, label_list,
                  learning_rate, batch_size, epochs, dropout_rate, warmup_proportion,
                  model_dir, save_checkpoint_steps, save_summary_steps, keep_checkpoint_max, bert_model_path, tokenizer,
-                 train_file=None, evaluation_file=None,
-                 zalo_prediction_output_path=None, encoding='utf-8'):
+                 train_file=None, evaluation_file=None, encoding='utf-8'):
         """ Constructor for BERT model for classification
             :parameter max_sequence_len (int): Maximum length of input sequence
             :parameter label_list (list): List of labels to classify
@@ -27,7 +26,6 @@ class BertClassifierModel(object):
             :parameter tokenizer (FullTokenier): BERT tokenizer for data processing
             :parameter train_file (string): The path to the tfrecords file that is used for training
             :parameter evaluation_file (string): The path to the tfrecords file that is used for evaluation
-            :parameter zalo_prediction_output_path (string): The default output file path for the Zalo submission file
             :parameter encoding (string): The encoding used in the dataset
         """
         # Variable initialization
@@ -43,7 +41,6 @@ class BertClassifierModel(object):
         self.bert_configfile = join(bert_model_path, 'bert_config.json')
         self.init_checkpoint = join(bert_model_path, 'bert_model.ckpt')
         self.tokenizer = tokenizer
-        self.zalo_prediction_output_path = zalo_prediction_output_path
         self.encoding = encoding
 
         # Specify outpit directory and number of checkpoint steps to save
@@ -351,7 +348,8 @@ class BertClassifierModel(object):
     def predict(self, qas):
         """ Get a prediction for each input qa pairs
             :parameter qas: (list of tuple) A list of question-paragraph pairs
-            :returns is_answers: (list) Corresponding to each qa pairs, is the paragraph contains the answer for the question
+            :returns is_answers: (list) Corresponding to each qa pairs,
+                        is the paragraph contains the answer for the question
         """
         sentences_formatted = [InputExample(guid="",
                                             question=qa[0],
@@ -381,12 +379,15 @@ class BertClassifierModel(object):
 
         return results
 
-    def predict_from_eval_file(self, test_file, output_file=None):
+    def predict_from_eval_file(self, test_file, output_file=None, file_output_mode="zalo"):
         """ Get prediction from predefined evaluation record (test set)
             :parameter test_file: The path to the tfrecords (preprocessed) file that need predicting
             :parameter output_file: Desired path to store the result
+            :parameter file_output_mode: Can be 'full' for full information on csv file, or 'zalo' for Zalo-defined
             :returns results (Dataframe): Prediction results
         """
+        assert file_output_mode.lower() in ['full', 'zalo'], "[Predict] File output mode can only be 'full' or 'zalo'"
+
         if not test_file:
             return
 
@@ -404,24 +405,27 @@ class BertClassifierModel(object):
                 "guid": prediction["guid"].decode(self.encoding),
                 "input_text": self.tokenizer.convert_ids_to_tokens(prediction["input_texts"]),
                 "prediction": self.labels_list[prediction["prediction"]],
-                # "label": self.labels_list[prediction["labels"]],
+                "label": self.labels_list[prediction["labels"]],
                 "probabilities": prediction["probabilities"][prediction["prediction"]]
             }
             results.append(_dict)
 
         if output_file:
-            trueonly_results = []
-            for result in results:
-                if result['prediction'] == 'True':
-                    result_test_id = result['guid'].split('$')[0]
-                    result_answer = result['guid'].split('$')[1]
-                    trueonly_results.append({
-                        "test_id": result_test_id,
-                        "answer": result_answer
-                    })
+            if file_output_mode.lower() == 'zalo':
+                trueonly_results = []
+                for result in results:
+                    if result['prediction'] == 'True':
+                        result_test_id = result['guid'].split('$')[0]
+                        result_answer = result['guid'].split('$')[1]
+                        trueonly_results.append({
+                            "test_id": result_test_id,
+                            "answer": result_answer
+                        })
 
-            trueonly_results_dataframe = pd.DataFrame.from_records(trueonly_results)
-            trueonly_results_dataframe.to_csv(path_or_buf=self.zalo_prediction_output_path, encoding=self.encoding,
-                                              index=False)
+                trueonly_results_dataframe = pd.DataFrame.from_records(trueonly_results)
+                trueonly_results_dataframe.to_csv(path_or_buf=output_file, encoding=self.encoding, index=False)
+            elif file_output_mode.lower() == 'full':
+                results_dataframe = pd.DataFrame.from_records(results)
+                results_dataframe.to_csv(path_or_buf=output_file, encoding=self.encoding, index=False)
 
         return pd.DataFrame.from_records(results)
