@@ -9,8 +9,6 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_string("mode", None,
                     "Training or Predicting?")
-flags.DEFINE_bool("train_display_info", True,
-                  "Display tensorflow flag to track training progress")
 flags.DEFINE_string("dataset_path", None,
                     "The path to the dataset")
 flags.DEFINE_string("bert_model_path", None,
@@ -52,11 +50,9 @@ flags.DEFINE_bool("force_data_balance", False,
 
 
 def main(_):
-    # tf.logging.set_verbosity(tf.logging.info if FLAGS.train_display_info else tf.logging.FATAL)
-
     print("[Main] Starting....")
 
-    # Tokenizer
+    # Tokenizer initialzation
     tokenier = tokenization.FullTokenizer(vocab_file=join(FLAGS.bert_model_path, 'vocab.txt'),
                                           do_lower_case=FLAGS.do_lowercase)
 
@@ -86,7 +82,7 @@ def main(_):
                                                  max_sequence_length=FLAGS.max_sequence_len)
         print('[Main] Preprocess complete')
 
-    # Define model & training/testing
+    # Model definition
     model = BertClassifierModel(
         max_sequence_len=FLAGS.max_sequence_len,
         label_list=ZaloDatasetProcessor.label_list,
@@ -107,6 +103,7 @@ def main(_):
         encoding=FLAGS.encoding,
     )
 
+    # Training/Testing
     if FLAGS.mode.lower() == 'train':
         print('[Main] Begin training')
         eval_result = model.train_and_eval()

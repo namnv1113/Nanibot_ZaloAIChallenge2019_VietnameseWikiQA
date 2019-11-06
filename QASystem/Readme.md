@@ -28,6 +28,7 @@ OUT_DIR='./finetuned/classifier/'
     --train_epochs=1 \
     --train_dropout_rate 0.1 \
     --bert_warmup_proportion 0.1 \
+    --l2_regularization_lambda 0.01 \
     --save_checkpoint_steps 500 \
     --save_summary_steps 100 \
     --keep_checkpoint_max 1 \
@@ -44,7 +45,6 @@ Required parameters:
     - `--model_path` The location where the fine-tuned model should be stored
 
 Optional parameters
-    - `--train_display_info` Should logging information be hidden during training? (Default is *True*)
     - `--max_sequence_len` The maximum input sequence length for embeddings (Default is *384*)
     - `--do_lowercase` Should the input text be lowercased (this should be the same as the `do_lowercase` settings in the BERT pretrained model)
     - `--model_learning_rate` The default model learning rate (Default is *2e-5*)
@@ -52,6 +52,7 @@ Optional parameters
     - `--train_epochs` Number of loops to train the whole dataset (Default is *1*)
     - `--train_dropout_rate` Default dropout rate (Default is *0.1*)
     - `--bert_warmup_proportion` Proportion of training to perform linear learning rate warmup (Default is *0.1*)
+    - `--l2_regularization_lambda` Constant for L2 regularization (Default is *0.01*)
     - `--save_checkpoint_steps` The number of steps between each checkpoint save (Default is *500*)
     - `--save_summary_steps` The number of steps between each summary write (Default is *100*)
     - `--keep_checkpoint_max` The maximum number of checkpoints to keep (Default is *1*)
