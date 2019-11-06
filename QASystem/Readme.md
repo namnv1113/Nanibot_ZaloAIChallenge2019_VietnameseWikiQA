@@ -23,27 +23,26 @@ OUT_DIR='./finetuned/classifier/'
 ```
 
 Required parameters:
-    - `--mode` Which mode to you want to run the model (*'train'* for training, *'eval'* for development set evaluation, *'predict_test'* for test set predicting & *'predict_manual'* for manual testing)
-    - `--dataset_path` The path directory that store the required dataset (note that *train.json* & *test.json* with Zalo format or its preprocessed tfrecords file must be contained in that folder)
-    - `--bert_model_path` The path to the pretrained BERT model
-    - `--model_path` The location where the fine-tuned model should be stored
+- `--mode` Which mode to you want to run the model (*'train'* for training, *'eval'* for development set evaluation, *'predict_test'* for test set predicting & *'predict_manual'* for manual testing)
+- `--dataset_path` The path directory that store the required dataset (note that *train.json* & *test.json* with Zalo format or its preprocessed tfrecords file must be contained in that folder)
+- `--bert_model_path` The path to the pretrained BERT model
+- `--model_path` The location where the fine-tuned model should be stored
 
 Optional parameters
-    - `--max_sequence_len` The maximum input sequence length for embeddings (Default is *384*)
-    - `--do_lowercase` Should the input text be lowercased (this should be the same as the `do_lowercase` settings in the BERT pretrained model)
-    - `--model_learning_rate` The default model learning rate (Default is *2e-5*)
-    - `--model_batch_size` Training batch size (Default is *8*)
-    - `--train_epochs` Number of loops to train the whole dataset (Default is *1*)
-    - `--train_dropout_rate` Default dropout rate (Default is *0.1*)
-    - `--bert_warmup_proportion` Proportion of training to perform linear learning rate warmup (Default is *0.1*)
-    - `--l2_regularization_lambda` Constant for L2 regularization (Default is *0.01*)
-    - `--save_checkpoint_steps` The number of steps between each checkpoint save (Default is *500*)
-    - `--save_summary_steps` The number of steps between each summary write (Default is *100*)
-    - `--keep_checkpoint_max` The maximum number of checkpoints to keep (Default is *1*)
-    - `--encoding` The default encoding used in the training dataset (Default set to *utf-8*)
-    - `--zalo_predict_csv_file` Destination for the Zalo submission predict file during *predict_test* (Default is *./zalo.csv*)
-    - `--eval_predict_csv_file` Destination for the development set predict file durting *train* and *eval* (Default is *None*)
-    - `--dev_size` The size of the development set taken from the training set (Default is *0.2*)
-    - `--force_data_balance` Balance training data by truncate training instance whose label is overwhelming (Default is *False*)
+- `--max_sequence_len` The maximum input sequence length for embeddings (Default is *384*)
+- `--do_lowercase` Should the input text be lowercased (this should be the same as the `do_lowercase` settings in the BERT pretrained model)
+- `--model_learning_rate` The default model learning rate (Default is *2e-5*)
+- `--model_batch_size` Training batch size (Default is *8*)
+- `--train_epochs` Number of loops to train the whole dataset (Default is *1*)
+- `--train_dropout_rate` Default dropout rate (Default is *0.1*)
+- `--bert_warmup_proportion` Proportion of training to perform linear learning rate warmup (Default is *0.1*)
+- `--l2_regularization_lambda` Constant for L2 regularization (Default is *0.01*)
+- `--save_checkpoint_steps` The number of steps between each checkpoint save (Default is *500*)
+- `--save_summary_steps` The number of steps between each summary write (Default is *100*)
+- `--keep_checkpoint_max` The maximum number of checkpoints to keep (Default is *1*)
+- `--encoding` The default encoding used in the training dataset (Default set to *utf-8*)
+- `--zalo_predict_csv_file` Destination for the Zalo submission predict file during *predict_test* (Default is *./zalo.csv*)
+- `--eval_predict_csv_file` Destination for the development set predict file durting *train* and *eval* (Default is *None*)
+- `--dev_size` The size of the development set taken from the training set (Default is *0.2*)
+- `--force_data_balance` Balance training data by truncate training instance whose label is overwhelming (Default is *False*)
     
-
