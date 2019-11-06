@@ -9,9 +9,10 @@ class BertClassifierModel(object):
     def __init__(self, max_sequence_len, label_list,
                  learning_rate, batch_size, epochs, dropout_rate, warmup_proportion,
                  model_dir, save_checkpoint_steps, save_summary_steps, keep_checkpoint_max, bert_model_path, tokenizer,
+                 textcnn_filter_sizes, textcnn_num_filters,
                  train_file=None, evaluation_file=None,
                  zalo_prediction_output_path=None, encoding='utf-8'):
-        """ Constructor for BERT model for classification
+        """ Constructor for BERT model for classification (BERT + TextCNN)
             :parameter max_sequence_len (int): Maximum length of input sequence
             :parameter label_list (list): List of labels to classify
             :parameter learning_rate (float): Initial learning rate
@@ -25,6 +26,9 @@ class BertClassifierModel(object):
             :parameter keep_checkpoint_max (int): The maximum number of checkpoints to keep
             :parameter bert_model_path (string): The path to BERT pretrained model
             :parameter tokenizer (FullTokenier): BERT tokenizer for data processing
+            :parameter textcnn_filter_sizes: Stride of each filter in each convolution layer
+                    The number of <filter_size> also indicates the number of different (parallel) convolution layers
+            :parameter textcnn_num_filters: The number of filters in each convolution layers
             :parameter train_file (string): The path to the tfrecords file that is used for training
             :parameter evaluation_file (string): The path to the tfrecords file that is used for evaluation
             :parameter zalo_prediction_output_path (string): The default output file path for the Zalo submission file
@@ -45,6 +49,9 @@ class BertClassifierModel(object):
         self.tokenizer = tokenizer
         self.zalo_prediction_output_path = zalo_prediction_output_path
         self.encoding = encoding
+
+        self.textcnn_filter_sizes = textcnn_filter_sizes
+        self.textcnn_num_filters = textcnn_num_filters
 
         # Specify outpit directory and number of checkpoint steps to save
         self.run_config = tf.estimator.RunConfig(
@@ -81,14 +88,51 @@ class BertClassifierModel(object):
             use_one_hot_embeddings=False,  # True if use TPU
         )
 
+        def _convolution_layer(input_x, output_size, width, stride):
+            """ Convolution layer (1D convolution followed by relu)
+                Convolution 1D
+                :parameter input_x: A tensor of embedded tokens with shape [batch_size, seq_length, embedding_size]
+                :parameter output_size: The number of feature maps we'd like to calculate (# of filters)
+                :parameter width: The filter width
+                :parameter stride: The stride
+                :return: Convolution output tensor with shape [batch_size, 1, max_length, output_size]
+            """
+            # Convolution 1D
+            input_size = input_x.get_shape()[-1]  # How many channels on the input (The size of our embedding)
+            # Make our text an image of height 1
+            input_x = tf.expand_dims(input_x, axis=1)  # Change the shape to [batch, H, W, channels]
+            # Filter shape will be [filter H = 1, filter W, Channels In, Channel Out]
+            _filter = tf.get_variable("conv_filter", shape=[1, width, input_size, output_size])
+            # Run the convolution as if this were an image
+            convolved = tf.nn.conv2d(input_x, filter=_filter, strides=[1, 1, stride, 1], padding="VALID")
+
+            # Pass through Relu
+            b = tf.Variable(tf.constant(0.1, shape=[output_size]), name="conv_bias")
+            return tf.nn.relu(convolved + b, name="relu")
+
         # Use model.get_pooled_output() for classification tasks on an entire sentence.
         # Use model.get_sequence_output() for token-level output.
-        output_layer = bert_module.get_pooled_output()
+        output_layer = bert_module.get_sequence_output()
 
+        # Create a TextCNN on top of BERT for classification
+
+        # Convolution layers
+        pooled_conv_outputs = []
+        for filter_size in self.textcnn_filter_sizes:
+            with tf.compat.v1.variable_scope('conv_{}'.format(filter_size)):
+                branch = _convolution_layer(output_layer, output_size=self.textcnn_num_filters,
+                                            width=filter_size, stride=1)
+                branch = tf.nn.max_pool(branch, ksize=[1, 1, self.max_sequence_len - filter_size + 1, 1],
+                                        strides=[1, 1, 1, 1], padding="VALID", name="max_pool")
+                pooled_conv_outputs.append(branch)
+
+        # Combined all pooled features
+        with tf.compat.v1.variable_scope("merge"):
+            output_layer = tf.concat(pooled_conv_outputs, 3, name='concat')
+            output_layer = tf.reshape(output_layer, [-1, self.textcnn_num_filters * len(self.textcnn_filter_sizes)])
+
+        # Passed the convoluted features into a fully connected layer
         hidden_size = output_layer.shape[-1].value
-
-        # Create a fully connected layer on top of BERT for classification
-        # Create our own layer to tune for politeness data.
         with tf.compat.v1.variable_scope("fully_connected"):
             # Dropout helps prevent overfitting
             if is_training:

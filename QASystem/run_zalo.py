@@ -31,6 +31,12 @@ flags.DEFINE_float("train_dropout_rate", 0.1,
                    "Default dropout rate")
 flags.DEFINE_float("bert_warmup_proportion", 0.1,
                    "Proportion of training to perform linear learning rate warmup")
+flags.DEFINE_list("textcnn_filter_sizes", [3, 4, 5],
+                  "The size of each 1D convolution filter in a layer (for TextCNN on top of BERT)"
+                  "The number of <filter_size> also indicates the number of different (parallel) convolution layers")
+flags.DEFINE_integer("textcnn_num_filters", 128,
+                     "The number of filters in each convolution layer (for TextCNN on top of BERT)")
+
 
 flags.DEFINE_integer("save_checkpoint_steps", 500,
                      "The number of steps between each checkpoint save")
@@ -92,6 +98,8 @@ def main(_):
         dropout_rate=FLAGS.train_dropout_rate,
         warmup_proportion=FLAGS.bert_warmup_proportion,
         model_dir=FLAGS.model_path,
+        textcnn_filter_sizes=FLAGS.textcnn_filter_sizes,
+        textcnn_num_filters=FLAGS.textcnn_num_filters,
         save_checkpoint_steps=FLAGS.save_checkpoint_steps,
         save_summary_steps=FLAGS.save_summary_steps,
         keep_checkpoint_max=FLAGS.keep_checkpoint_max,
