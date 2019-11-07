@@ -21,7 +21,7 @@ After running, 3 files will be returned `result_25.json`, `result_50.json` and `
 
 # SQuAD Translate
 
-This `translate/py` file contains the source code to translate SQuAD training file (from English to Vietnamese)
+This `translate.py` file contains the source code to translate SQuAD training file (from English to Vietnamese)
 
 ## Requirements
 	* Python 3.x (Tested on Python 3.6.7)
@@ -38,3 +38,22 @@ python translate.py -in <input_file> -out <output_file>
 ```
 
 Along with the output translated file, `error.txt` and `progress.json` are returned indicates question-answer pairs with errors that can be processes; and current progress so that the program can be continued after termination.
+
+
+# SQuAD to Zalo format dataset converter
+
+This `convert_squad2zalo_format.py` file contains the source code to convert a dataset (json) file from SQuAD v2.0 format to Zalo-defined format
+
+## Run the code
+```sh
+python convert_squad2zalo_format -i <input_file> -o <output_file> -m <mode>
+```
+
+Where
+- `-i` or `--input_file` The path to the input SQuAD datset that need to be converted
+- `-o` or `--output` The desired path where the output Zalo-formatted datset should be saved
+- `-e` or `--encoding` The encoding of the input & the desired output dataset
+- `-m` or `--mode` Which conversion mechanism should be used (*'full'* or *'short'*), which determine the `text` label for each question in the Zalo-formatted dataset
+
+    - `full`: `text` will be the full `paragraph` in the source SQuAD dataset
+    - `short`: `text` will be the sentence that contains the `answer` in the `paragraph` if the `answer` is present, else, `text` will be 1 or 2 random sentences in the paragraph.
