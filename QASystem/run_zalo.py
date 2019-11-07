@@ -9,8 +9,6 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_string("mode", None,
                     "Training or Predicting?")
-flags.DEFINE_bool("train_display_info", True,
-                  "Display tensorflow flag to track training progress")
 flags.DEFINE_string("dataset_path", None,
                     "The path to the dataset")
 flags.DEFINE_string("bert_model_path", None,
@@ -45,14 +43,18 @@ flags.DEFINE_string("encoding", "utf-8",
                     "Encoding used in the dataset")
 flags.DEFINE_string("zalo_predict_csv_file", "./zalo.csv",
                     "Destination for the Zalo submission predict file")
+flags.DEFINE_string("eval_predict_csv_file", "./eval.csv",
+                    "Destination for the development set predict file (None if no output is required)")
+flags.DEFINE_float("dev_size", 0.2,
+                   "The size of the development set taken from the training set")
+flags.DEFINE_bool("force_data_balance", False,
+                  "Balance training data by truncate training instance whose label is overwhelming")
 
 
 def main(_):
-    tf.logging.set_verbosity(tf.logging.info if FLAGS.train_display_info else tf.logging.FATAL)
-
     print("[Main] Starting....")
 
-    # Tokenizer
+    # Tokenizer initialzation
     tokenier = tokenization.FullTokenizer(vocab_file=join(FLAGS.bert_model_path, 'vocab.txt'),
                                           do_lower_case=FLAGS.do_lowercase)
 
@@ -74,7 +76,7 @@ def main(_):
 
     if not is_preprocessed():
         print('[Main] No preprocess data found. Begin preprocess')
-        dataset_processor = ZaloDatasetProcessor()
+        dataset_processor = ZaloDatasetProcessor(dev_size=FLAGS.dev_size, force_data_balance=FLAGS.force_data_balance)
         dataset_processor.load_from_path(encode=FLAGS.encoding, dataset_path=FLAGS.dataset_path)
         dataset_processor.write_all_to_tfrecords(encoding=FLAGS.encoding,
                                                  output_folder=FLAGS.dataset_path,
@@ -82,7 +84,7 @@ def main(_):
                                                  max_sequence_length=FLAGS.max_sequence_len)
         print('[Main] Preprocess complete')
 
-    # Define model & training/testing
+    # Model definition
     model = BertClassifierModel(
         max_sequence_len=FLAGS.max_sequence_len,
         label_list=ZaloDatasetProcessor.label_list,
@@ -99,10 +101,10 @@ def main(_):
         tokenizer=tokenier,
         train_file=train_file if (FLAGS.mode.lower() == 'train') else None,
         evaluation_file=dev_file,
-        zalo_prediction_output_path=FLAGS.zalo_predict_csv_file,
         encoding=FLAGS.encoding,
     )
 
+    # Training/Testing
     if FLAGS.mode.lower() == 'train':
         print('[Main] Begin training')
         eval_result = model.train_and_eval()
@@ -113,6 +115,10 @@ def main(_):
         print("F1 Score: {}".format(eval_result['f1_score'] * 100))
         print("Recall: {}%".format(eval_result['recall'] * 100))
         print("Precision: {}%".format(eval_result['precision'] * 100))
+        if FLAGS.eval_predict_csv_file is not None:
+            print('[Main] Development set predict and output to file')
+            _ = model.predict_from_eval_file(test_file=dev_file, output_file=FLAGS.eval_predict_csv_file,
+                                             file_output_mode='full')
     elif FLAGS.mode.lower() == 'eval':
         eval_result = model.eval()
         print('[Main] Evaluation complete')
@@ -121,6 +127,10 @@ def main(_):
         print("F1 Score: {}".format(eval_result['f1_score'] * 100))
         print("Recall: {}%".format(eval_result['recall'] * 100))
         print("Precision: {}%".format(eval_result['precision'] * 100))
+        if FLAGS.eval_predict_csv_file is not None:
+            print('[Main] Development set predict and output to file')
+            _ = model.predict_from_eval_file(test_file=dev_file, output_file=FLAGS.eval_predict_csv_file,
+                                             file_output_mode='full')
     elif FLAGS.mode.lower() == 'predict_test':
         print("[Main] Begin Predict based on Test file")
         results = model.predict_from_eval_file(test_file=test_file, output_file=FLAGS.zalo_predict_csv_file)

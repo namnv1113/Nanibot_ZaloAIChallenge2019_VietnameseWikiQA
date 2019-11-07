@@ -9,27 +9,24 @@ class BertClassifierModel(object):
     def __init__(self, max_sequence_len, label_list,
                  learning_rate, batch_size, epochs, dropout_rate, warmup_proportion,
                  model_dir, save_checkpoint_steps, save_summary_steps, keep_checkpoint_max, bert_model_path, tokenizer,
-                 train_file=None, evaluation_file=None,
-                 zalo_prediction_output_path=None, encoding='utf-8'):
-        """ Constructor for TextCNN
-            Parameters:
-                max_sequence_len (int): Maximum length of input sequence
-                label_list (list): List of labels to classify
-                learning_rate (float): Initial learning rate
-                batch_size (int): Batch size
-                epochs (int): Train for how many epochs?
-                dropout_rate (float): The dropout rate of the fully connected layer input (pretrained BERT output)
-                warmup_proportion (float): The amount of training steps is used for warmup
-                model_dir (string): Folder path to store the model
-                save_checkpoint_steps (int): The number of steps to save checkpoints
-                save_summary_steps (int): The number of steps to save summary
-                keep_checkpoint_max (int): The maximum number of checkpoints to keep
-                bert_model_path (string): The path to BERT pretrained model
-                tokenizer (FullTokenier): BERT tokenizer for data processing
-                train_file (string): The path to the tfrecords file that is used for training
-                evaluation_file (string): The path to the tfrecords file that is used for evaluation
-                zalo_prediction_output_path (string): The default output file path for the Zalo submission predict file
-                encoding (string): The encoding used in the dataset
+                 train_file=None, evaluation_file=None, encoding='utf-8'):
+        """ Constructor for BERT model for classification
+            :parameter max_sequence_len (int): Maximum length of input sequence
+            :parameter label_list (list): List of labels to classify
+            :parameter learning_rate (float): Initial learning rate
+            :parameter batch_size (int): Batch size
+            :parameter epochs (int): Train for how many epochs?
+            :parameter dropout_rate (float): The dropout rate of the fully connected layer input
+            :parameter warmup_proportion (float): The amount of training steps is used for warmup
+            :parameter model_dir (string): Folder path to store the model
+            :parameter save_checkpoint_steps (int): The number of steps to save checkpoints
+            :parameter save_summary_steps (int): The number of steps to save summary
+            :parameter keep_checkpoint_max (int): The maximum number of checkpoints to keep
+            :parameter bert_model_path (string): The path to BERT pretrained model
+            :parameter tokenizer (FullTokenier): BERT tokenizer for data processing
+            :parameter train_file (string): The path to the tfrecords file that is used for training
+            :parameter evaluation_file (string): The path to the tfrecords file that is used for evaluation
+            :parameter encoding (string): The encoding used in the dataset
         """
         # Variable initialization
         self.max_sequence_len = max_sequence_len
@@ -41,11 +38,9 @@ class BertClassifierModel(object):
         self.dropout_rate = dropout_rate
         self.train_file = train_file
         self.evaluation_file = evaluation_file
-        # self.bert_model_path = bert_model_path
         self.bert_configfile = join(bert_model_path, 'bert_config.json')
         self.init_checkpoint = join(bert_model_path, 'bert_model.ckpt')
         self.tokenizer = tokenizer
-        self.zalo_prediction_output_path = zalo_prediction_output_path
         self.encoding = encoding
 
         # Specify outpit directory and number of checkpoint steps to save
@@ -89,21 +84,19 @@ class BertClassifierModel(object):
 
         hidden_size = output_layer.shape[-1].value
 
+        # Create a fully connected layer on top of BERT for classification
         # Create our own layer to tune for politeness data.
-        output_weights = tf.compat.v1.get_variable(
-            "output_weights", [self.num_labels, hidden_size],
-            initializer=tf.truncated_normal_initializer(stddev=0.02))
-
-        output_bias = tf.compat.v1.get_variable(
-            "output_bias", [self.num_labels], initializer=tf.zeros_initializer())
-
-        with tf.compat.v1.variable_scope("loss"):
+        with tf.compat.v1.variable_scope("fully_connected"):
             # Dropout helps prevent overfitting
             if is_training:
                 output_layer = tf.nn.dropout(output_layer, rate=self.dropout_rate)
+            fc_weights = tf.compat.v1.get_variable("fc_weights", [self.num_labels, hidden_size],
+                                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
+            fc_bias = tf.compat.v1.get_variable("fc_bias", [self.num_labels],
+                                                initializer=tf.zeros_initializer())
 
-            logits = tf.matmul(output_layer, output_weights, transpose_b=True)
-            logits = tf.nn.bias_add(logits, output_bias)
+            logits = tf.matmul(output_layer, fc_weights, transpose_b=True)
+            logits = tf.nn.bias_add(logits, fc_bias)
             probabilities = tf.nn.softmax(logits, axis=-1)
             log_probs = tf.nn.log_softmax(logits, axis=-1)
 
@@ -111,16 +104,18 @@ class BertClassifierModel(object):
             one_hot_labels = tf.one_hot(labels, depth=self.num_labels, dtype=tf.float32)
             predicted_labels = tf.argmax(log_probs, axis=-1, output_type=tf.int32)
 
-            # If we're train/eval, compute loss between predicted and actual label
+        # If we're train/eval, compute loss between predicted and actual label
+        with tf.compat.v1.variable_scope("fully_connected_loss"):
             per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
             loss = tf.reduce_mean(per_example_loss)
             return loss, per_example_loss, predicted_labels, log_probs, probabilities
 
     def model_fn_builder(self):
-        """Returns `model_fn` closure for Estimator."""
+        """ Returns `model_fn` closure for Estimator. """
 
         def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
             """The `model_fn` for Estimator."""
+            # Get input features
             guid = features["guid"]
             input_ids = features["input_ids"]
             input_mask = features["input_mask"]
@@ -132,6 +127,7 @@ class BertClassifierModel(object):
             else:
                 is_real_example = tf.ones(tf.shape(label_ids), dtype=tf.float32)
 
+            # Pass through model
             is_training = (mode == tf.estimator.ModeKeys.TRAIN)
             (total_loss, _, predicted_labels, log_probs, probabilities) = self.create_model(
                 is_training, input_ids, input_mask, segment_ids, label_ids)
@@ -140,6 +136,7 @@ class BertClassifierModel(object):
                 = modeling.get_assignment_map_from_checkpoint(tf.trainable_variables(), self.init_checkpoint)
             tf.train.init_from_checkpoint(self.init_checkpoint, assignment_map)
 
+            # Optimize/Predict
             if mode == tf.estimator.ModeKeys.TRAIN:
                 train_op = optimization.create_optimizer(
                     total_loss, self.learning_rate, self.num_train_steps, self.num_warmup_steps, use_tpu=False)
@@ -184,7 +181,12 @@ class BertClassifierModel(object):
         return model_fn
 
     def _file_based_input_fn_builder(self, input_file, is_training, drop_remainder=False):
-        """Creates an `input_fn` closure to be passed to Estimator - Used for tfrecord files """
+        """ Creates an `input_fn` closure to be passed to Estimator - Used for tfrecord files
+            :parameter input_file: The path to a TFRecord file (preprocessed file)
+            :parameter is_training: Is the input_file used for training?
+            :parameter drop_remainder: Should drop the last batch where there is not enough data to form a batch
+            :returns A function to generate input data to the model
+        """
 
         name_to_features = {
             "guid": tf.io.FixedLenFeature([], tf.string),
@@ -228,7 +230,12 @@ class BertClassifierModel(object):
         return input_fn
 
     def _input_fn_builder(self, input_features, is_training, drop_remainder=False):
-        """Creates an `input_fn` closure to be passed to Estimator - Used for predicting """
+        """ Creates an `input_fn` closure to be passed to Estimator - Used for predicting
+            :parameter input_features: List of processed input data (InputFeatures)
+            :parameter is_training: Is the input_features used for training?
+            :parameter drop_remainder: Should drop the last batch where there is not enough data to form a batch
+            :returns A function to generate input data to the model
+        """
         all_input_ids = []
         all_input_mask = []
         all_segment_ids = []
@@ -292,8 +299,7 @@ class BertClassifierModel(object):
 
     def train_and_eval(self):
         """ Training & evaluate model
-            Return
-                eval_results (dictionary): Evaluation results (accuracy, f1, precision & recall)
+            :returns eval_results (dictionary): Evaluation results (accuracy, f1, precision & recall)
         """
         if not self.train_file or not self.evaluation_file:
             return
@@ -324,9 +330,8 @@ class BertClassifierModel(object):
         return self.eval()
 
     def eval(self):
-        """ Evaluate model based on predefined evaluation record (test set)
-            Return
-                eval_results (dictionary): Evaluation results (accuracy, f1, precision & recall)
+        """ Evaluate model based on predefined evaluation record (development set)
+            :returns eval_results (dictionary): Evaluation results (accuracy, f1, precision & recall)
         """
         if not self.evaluation_file:
             return
@@ -341,11 +346,10 @@ class BertClassifierModel(object):
         return eval_results
 
     def predict(self, qas):
-        """ Get a prediction for the input qa pair
-            Parameters:
-                qas (list of tuple): A list of question-paragraph pairs
-            Return
-                is_answers (list): Corresponding to each qa pairs, is the paragraph contains the answer for the question
+        """ Get a prediction for each input qa pairs
+            :parameter qas: (list of tuple) A list of question-paragraph pairs
+            :returns is_answers: (list) Corresponding to each qa pairs,
+                        is the paragraph contains the answer for the question
         """
         sentences_formatted = [InputExample(guid="",
                                             question=qa[0],
@@ -375,14 +379,15 @@ class BertClassifierModel(object):
 
         return results
 
-    def predict_from_eval_file(self, test_file, output_file=None):
+    def predict_from_eval_file(self, test_file, output_file=None, file_output_mode="zalo"):
         """ Get prediction from predefined evaluation record (test set)
-            Parameters:
-                test_file (str): The path to the tfrecords (preprocessed) file that need predicting
-                output_file (str): Desired path to store the result
-            Return:
-                results (Dataframe): Prediction results
+            :parameter test_file: The path to the tfrecords (preprocessed) file that need predicting
+            :parameter output_file: Desired path to store the result
+            :parameter file_output_mode: Can be 'full' for full information on csv file, or 'zalo' for Zalo-defined
+            :returns results (Dataframe): Prediction results
         """
+        assert file_output_mode.lower() in ['full', 'zalo'], "[Predict] File output mode can only be 'full' or 'zalo'"
+
         if not test_file:
             return
 
@@ -400,24 +405,27 @@ class BertClassifierModel(object):
                 "guid": prediction["guid"].decode(self.encoding),
                 "input_text": self.tokenizer.convert_ids_to_tokens(prediction["input_texts"]),
                 "prediction": self.labels_list[prediction["prediction"]],
-                # "label": self.labels_list[prediction["labels"]],
+                "label": self.labels_list[prediction["labels"]],
                 "probabilities": prediction["probabilities"][prediction["prediction"]]
             }
             results.append(_dict)
 
         if output_file:
-            trueonly_results = []
-            for result in results:
-                if result['prediction'] == 'True':
-                    result_test_id = result['guid'].split('$')[0]
-                    result_answer = result['guid'].split('$')[1]
-                    trueonly_results.append({
-                        "test_id": result_test_id,
-                        "answer": result_answer
-                    })
+            if file_output_mode.lower() == 'zalo':
+                trueonly_results = []
+                for result in results:
+                    if result['prediction'] == 'True':
+                        result_test_id = result['guid'].split('$')[0]
+                        result_answer = result['guid'].split('$')[1]
+                        trueonly_results.append({
+                            "test_id": result_test_id,
+                            "answer": result_answer
+                        })
 
-            trueonly_results_dataframe = pd.DataFrame.from_records(trueonly_results)
-            trueonly_results_dataframe.to_csv(path_or_buf=self.zalo_prediction_output_path, encoding=self.encoding,
-                                              index=False)
+                trueonly_results_dataframe = pd.DataFrame.from_records(trueonly_results)
+                trueonly_results_dataframe.to_csv(path_or_buf=output_file, encoding=self.encoding, index=False)
+            elif file_output_mode.lower() == 'full':
+                results_dataframe = pd.DataFrame.from_records(results)
+                results_dataframe.to_csv(path_or_buf=output_file, encoding=self.encoding, index=False)
 
         return pd.DataFrame.from_records(results)

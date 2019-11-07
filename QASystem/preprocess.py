@@ -2,24 +2,21 @@ from tqdm import tqdm
 from os.path import join
 import json
 import collections
-from sklearn.model_selection import train_test_split
 import tensorflow as tf
+import random
 
 
 class InputExample(object):
     """A single training/test example in Zalo format for simple sequence classification."""
 
     def __init__(self, guid, question, text, title=None, label=None):
-        """Constructs a InputExample.
-
-    Args:
-      guid: Unique id for the example.
-      question: string. The untokenized text of the first sequence.
-      text: (Optional) string. The untokenized text of the second sequence
-      label: (Optional) string. The label of the example. This should be
-      title: (Optinal) string. The Wikipedia title where the text is retrieved
-        specified for train and dev examples, but not for test examples.
-    """
+        """ Constructs a InputExample.
+            :parameter guid: Unique id for the example.
+            :parameter question: The untokenized text of the first sequence.
+            :parameter text (Optional): The untokenized text of the second sequence
+            :parameter label (Optional): The label of the example. This should be
+            :parameter title (Optinal): The Wikipedia title where the text is retrieved
+        """
         self.guid = guid
         self.question = question
         self.text = text
@@ -62,18 +59,27 @@ class ZaloDatasetProcessor(object):
     """ Base class to process & store input data for the Zalo AI Challenge dataset"""
     label_list = ['False', 'True']
 
-    def __init__(self):
+    def __init__(self, dev_size=0.2, force_data_balance=False):
+        """ ZaloDatasetProcessor constructor
+            :parameter dev_size: The size of the development set taken from the training set
+            :parameter force_data_balance: Balance training data by truncate training instance whose label is overwhelming
+        """
         self.train_data = []
         self.dev_data = []
         self.test_data = []
+        self.dev_size = dev_size
+        self.force_data_balance = force_data_balance
 
-    def load_from_path(self, dataset_path, encode='utf-8', train_filepath='train.json', test_filepath='test.json'):
-        """
-            Load data from file & store into memory
-
+    def load_from_path(self, dataset_path, encode='utf-8', train_filename='train.json', test_filename='test.json'):
+        """ Load data from file & store into memory
             Need to be called before preprocess(before write_all_to_tfrecords) is called
+            :parameter dataset_path: The path to the directory where the dataset is stored
+            :parameter encode: The encoding of every dataset file
+            :parameter train_filename: The name of the training file
+            :parameter test_filename: The name of the test file
         """
-        with open(join(dataset_path, train_filepath), 'r', encoding=encode) as train_file:
+        # Get train data, convert to InputExample
+        with open(join(dataset_path, train_filename), 'r', encoding=encode) as train_file:
             train_data = json.load(train_file)
             train_data_formatted = []
             train_data_formatted.extend(
@@ -83,9 +89,28 @@ class ZaloDatasetProcessor(object):
                              text=data_instance['text'],
                              label=self.label_list[data_instance['label']]) for data_instance in tqdm(train_data)
             )
-            self.train_data, self.dev_data = train_test_split(train_data_formatted, shuffle=True, test_size=0.2)
 
-        with open(join(dataset_path, test_filepath), 'r', encoding=encode) as test_file:
+            # Divide into train set and dev set while maintain label ratio in each set
+            if self.force_data_balance:
+                min_label_data_size = min([len([data for data in train_data_formatted if data.label == label])
+                                           for label in self.label_list])
+            for label in self.label_list:
+                train_data_by_label = [data for data in train_data_formatted if data.label == label]
+                # Truncate for data balancing
+                if self.force_data_balance:
+                    train_data_by_label = train_data_by_label[0:min_label_data_size]
+                # Split to train & dev set
+                random.shuffle(train_data_by_label)
+                _split_location = int(len(train_data_by_label) * self.dev_size)
+                self.dev_data.extend(train_data_by_label[0:_split_location])
+                self.train_data.extend(train_data_by_label[_split_location:-1])
+
+            # Shuffle data
+            random.shuffle(self.train_data)
+            random.shuffle(self.dev_data)
+
+        # Get test data, convert to InputExample
+        with open(join(dataset_path, test_filename), 'r', encoding=encode) as test_file:
             test_data = json.load(test_file)
             for data_instance in tqdm(test_data):
                 self.test_data.extend(
@@ -100,7 +125,15 @@ class ZaloDatasetProcessor(object):
     def write_all_to_tfrecords(self, output_folder, tokenier, max_sequence_length,
                                train_filename='train.tfrecords', dev_filename='dev.tfrecords',
                                test_filename='test.tfrecords', encoding='utf-8'):
-        """ Write data to tfrecords format, prepare for training/testing """
+        """ Write data to tfrecords format, prepare for training/testing
+            :parameter output_folder: The path to the directory where the preprocessed data are stored
+            :parameter tokenier: A BERT-based tokenier to tokenize text
+            :parameter max_sequence_length: The maximum input sequence length for embedding
+            :parameter train_filename: Preprocessed train output(preprocessed) file name
+            :parameter dev_filename: Preprocessed developement output(preprocessed) file name
+            :parameter test_filename: Preprocessed test output(preprocessed) file name
+            :parameter encoding: The encoding of preprocessed files
+        """
 
         # Extract features & store to file
         self._file_based_convert_examples_to_features(examples=self.train_data,
@@ -124,7 +157,14 @@ class ZaloDatasetProcessor(object):
 
     def _file_based_convert_examples_to_features(
             self, examples, label_list, max_seq_length, tokenizer, output_file, encoding='utf-8'):
-        """Convert a set of `InputExample`s to a TFRecord file."""
+        """ Convert a set of `InputExample`s to a TFRecord file.
+            :parameter examples: List of InputRecord instances that need to be stored
+            :parameter label_list: List of possible labels for predicting
+            :parameter max_seq_length: The maximum input sequence length for embedding
+            :parameter tokenizer: A BERT-based tokenier to tokenize text
+            :parameter output_file: The output TFRecord file path
+            :parameter encoding: The encoding of preprocessed files
+        """
 
         writer = tf.io.TFRecordWriter(output_file)
 
@@ -155,7 +195,12 @@ class ZaloDatasetProcessor(object):
         writer.close()
 
     def _convert_single_example(self, example, label_list, max_seq_length, tokenizer):
-        """Converts a single `InputExample` into a single `InputFeatures`."""
+        """ Converts a single `InputExample` into a single `InputFeatures`.
+            :parameter example: A InputRecord instance represent a data instance
+            :parameter label_list: List of possible labels for predicting
+            :parameter max_seq_length: The maximum input sequence length for embedding
+            :parameter tokenizer: A BERT-based tokenier to tokenize text
+        """
 
         # Return dummy features if fake example (for batch padding purpose)
         if isinstance(example, PaddingInputExample):
@@ -268,8 +313,11 @@ class ZaloDatasetProcessor(object):
         return feature
 
     def convert_examples_to_features(self, examples, label_list, max_seq_length, tokenizer):
-        """ Convert a set of `InputExample`s to a list of `InputFeatures`.
-            Helper class for prediction
+        """ Convert a set of `InputExample`s to a list of `InputFeatures`. (Helper class for prediction)
+            :parameter examples: List of InputRecord instances that need to be processed
+            :parameter label_list: List of possible labels for predicting
+            :parameter max_seq_length: The maximum input sequence length for embedding
+            :parameter tokenizer: A BERT-based tokenier to tokenize text
         """
         features = []
         for (ex_index, example) in enumerate(examples):
