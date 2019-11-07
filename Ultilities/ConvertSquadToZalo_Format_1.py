@@ -25,7 +25,7 @@ if __name__ == '__main__':
                     'question': qas['question'],
                     'title': data['title'],
                     'text': paragraph['context'],
-                    'label': qas['is_impossible']
+                    'label': False if qas['is_impossible'] else True
                 })
 
     # Export converted data
