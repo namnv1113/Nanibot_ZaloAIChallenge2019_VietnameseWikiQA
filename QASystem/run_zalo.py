@@ -2,7 +2,7 @@ import tensorflow as tf
 from os.path import join, exists
 from preprocess import ZaloDatasetProcessor
 from modeling import BertClassifierModel
-from bert import tokenization
+from albert import tokenization
 
 flags = tf.flags
 FLAGS = flags.FLAGS
@@ -16,12 +16,12 @@ flags.DEFINE_string("bert_model_path", None,
 flags.DEFINE_string("model_path", None,
                     "Default path to store the trained model")
 
-flags.DEFINE_integer("max_sequence_len", 384,
+flags.DEFINE_integer("max_sequence_len", 128,
                      "The maximum input sequence length for embeddings")
 flags.DEFINE_bool("do_lowercase", False,
                   "Whether to lower case the input text. Should be True for uncased "
                   "models and False for cased models.")
-flags.DEFINE_float("model_learning_rate", 2e-5,
+flags.DEFINE_float("model_learning_rate", 1e-5,
                    "The default model learning rate")
 flags.DEFINE_integer("model_batch_size", 3,
                      "Training input batch size")
@@ -31,6 +31,8 @@ flags.DEFINE_float("train_dropout_rate", 0.1,
                    "Default dropout rate")
 flags.DEFINE_float("bert_warmup_proportion", 0.1,
                    "Proportion of training to perform linear learning rate warmup")
+flags.DEFINE_bool("use_pooled_output", True,
+                  "Whether to use the CLS token outputs")
 
 flags.DEFINE_integer("save_checkpoint_steps", 500,
                      "The number of steps between each checkpoint save")
@@ -55,8 +57,8 @@ def main(_):
     print("[Main] Starting....")
 
     # Tokenizer initialzation
-    tokenier = tokenization.FullTokenizer(vocab_file=join(FLAGS.bert_model_path, 'vocab.txt'),
-                                          do_lower_case=FLAGS.do_lowercase)
+    tokenizer = tokenization.FullTokenizer(vocab_file=None, do_lower_case=FLAGS.do_lowercase,
+                                           spm_model_file=join(FLAGS.bert_model_path, 'vocab', '30k-clean.model'))
 
     # Data initialization
     train_file = join(FLAGS.dataset_path, "train.tfrecords")
@@ -80,7 +82,7 @@ def main(_):
         dataset_processor.load_from_path(encode=FLAGS.encoding, dataset_path=FLAGS.dataset_path)
         dataset_processor.write_all_to_tfrecords(encoding=FLAGS.encoding,
                                                  output_folder=FLAGS.dataset_path,
-                                                 tokenier=tokenier,
+                                                 tokenier=tokenizer,
                                                  max_sequence_length=FLAGS.max_sequence_len)
         print('[Main] Preprocess complete')
 
@@ -93,12 +95,13 @@ def main(_):
         epochs=FLAGS.train_epochs,
         dropout_rate=FLAGS.train_dropout_rate,
         warmup_proportion=FLAGS.bert_warmup_proportion,
+        use_pooled_output=FLAGS.use_pooled_output,
         model_dir=FLAGS.model_path,
         save_checkpoint_steps=FLAGS.save_checkpoint_steps,
         save_summary_steps=FLAGS.save_summary_steps,
         keep_checkpoint_max=FLAGS.keep_checkpoint_max,
         bert_model_path=FLAGS.bert_model_path,
-        tokenizer=tokenier,
+        tokenizer=tokenizer,
         train_file=train_file if (FLAGS.mode.lower() == 'train') else None,
         evaluation_file=dev_file,
         encoding=FLAGS.encoding,
@@ -157,6 +160,8 @@ def flags_check():
     assert exists(FLAGS.dataset_path), "[FlagsCheck] Dataset path doesn't exist"
     assert exists(FLAGS.bert_model_path), "[FlagsCheck] BERT pretrained model path doesn't exist"
     assert FLAGS.model_path is not None, "[FlagsCheck] BERT finetuned model location must be set"
+    tokenization.validate_case_matches_checkpoint(do_lower_case=FLAGS.do_lowercase,
+                                                  init_checkpoint=join(FLAGS.bert_model_path, 'tf2_model.h5'))
 
 
 if __name__ == "__main__":

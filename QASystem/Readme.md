@@ -36,6 +36,7 @@ Optional parameters
 - `--train_epochs` Number of loops to train the whole dataset (Default is *1*)
 - `--train_dropout_rate` Default dropout rate (Default is *0.1*)
 - `--bert_warmup_proportion` Proportion of training to perform linear learning rate warmup (Default is *0.1*)
+- `--use_pooled_output` Whether to use the CLS token outputs (Default is *True*)
 - `--l2_regularization_lambda` Constant for L2 regularization (Default is *0.01*)
 - `--save_checkpoint_steps` The number of steps between each checkpoint save (Default is *500*)
 - `--save_summary_steps` The number of steps between each summary write (Default is *100*)

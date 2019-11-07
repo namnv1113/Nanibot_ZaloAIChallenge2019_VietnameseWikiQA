@@ -1,5 +1,5 @@
 import tensorflow as tf
-from bert import optimization, modeling
+from albert import optimization, modeling
 from os.path import join
 import pandas as pd
 from preprocess import InputExample, ZaloDatasetProcessor
@@ -7,7 +7,7 @@ from preprocess import InputExample, ZaloDatasetProcessor
 
 class BertClassifierModel(object):
     def __init__(self, max_sequence_len, label_list,
-                 learning_rate, batch_size, epochs, dropout_rate, warmup_proportion,
+                 learning_rate, batch_size, epochs, dropout_rate, warmup_proportion, use_pooled_output,
                  model_dir, save_checkpoint_steps, save_summary_steps, keep_checkpoint_max, bert_model_path, tokenizer,
                  train_file=None, evaluation_file=None, encoding='utf-8'):
         """ Constructor for BERT model for classification
@@ -18,6 +18,7 @@ class BertClassifierModel(object):
             :parameter epochs (int): Train for how many epochs?
             :parameter dropout_rate (float): The dropout rate of the fully connected layer input
             :parameter warmup_proportion (float): The amount of training steps is used for warmup
+            :parameter use_pooled_output (bool): Whether to use the CLS token outputs
             :parameter model_dir (string): Folder path to store the model
             :parameter save_checkpoint_steps (int): The number of steps to save checkpoints
             :parameter save_summary_steps (int): The number of steps to save summary
@@ -36,10 +37,11 @@ class BertClassifierModel(object):
         self.batch_size = batch_size
         self.epochs = epochs
         self.dropout_rate = dropout_rate
+        self.use_pooled_output = use_pooled_output
         self.train_file = train_file
         self.evaluation_file = evaluation_file
-        self.bert_configfile = join(bert_model_path, 'bert_config.json')
-        self.init_checkpoint = join(bert_model_path, 'bert_model.ckpt')
+        self.bert_configfile = join(bert_model_path, 'config.json')
+        self.init_checkpoint = join(bert_model_path, 'tf2_model.h5')
         self.tokenizer = tokenizer
         self.encoding = encoding
 
@@ -69,8 +71,8 @@ class BertClassifierModel(object):
 
     def create_model(self, is_training, input_ids, input_mask, segment_ids, labels):
         """ Create a classification model based on BERT """
-        bert_module = modeling.BertModel(
-            config=modeling.BertConfig.from_json_file(self.bert_configfile),
+        model = modeling.AlbertModel(
+            config=modeling.AlbertConfig.from_json_file(self.bert_configfile),
             is_training=is_training,
             input_ids=input_ids,
             input_mask=input_mask,
@@ -78,9 +80,14 @@ class BertClassifierModel(object):
             use_one_hot_embeddings=False,  # True if use TPU
         )
 
-        # Use model.get_pooled_output() for classification tasks on an entire sentence.
-        # Use model.get_sequence_output() for token-level output.
-        output_layer = bert_module.get_pooled_output()
+        # # Use model.get_pooled_output() for classification tasks on an entire sentence.
+        # # Use model.get_sequence_output() for token-level output.
+        if self.use_pooled_output:
+            # Use pooled output
+            output_layer = model.get_pooled_output()
+        else:
+            # Use meaned output
+            output_layer = tf.reduce_mean(model.get_sequence_output(), axis=1)
 
         hidden_size = output_layer.shape[-1].value
 
@@ -97,18 +104,19 @@ class BertClassifierModel(object):
 
             logits = tf.matmul(output_layer, fc_weights, transpose_b=True)
             logits = tf.nn.bias_add(logits, fc_bias)
+            predicted_labels = tf.argmax(logits, axis=-1, output_type=tf.int32)
             probabilities = tf.nn.softmax(logits, axis=-1)
             log_probs = tf.nn.log_softmax(logits, axis=-1)
 
             # Convert labels into one-hot encoding
             one_hot_labels = tf.one_hot(labels, depth=self.num_labels, dtype=tf.float32)
-            predicted_labels = tf.argmax(log_probs, axis=-1, output_type=tf.int32)
 
         # If we're train/eval, compute loss between predicted and actual label
         with tf.compat.v1.variable_scope("fully_connected_loss"):
             per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
             loss = tf.reduce_mean(per_example_loss)
-            return loss, per_example_loss, predicted_labels, log_probs, probabilities
+
+        return loss, per_example_loss, predicted_labels, log_probs, probabilities
 
     def model_fn_builder(self):
         """ Returns `model_fn` closure for Estimator. """
@@ -132,9 +140,10 @@ class BertClassifierModel(object):
             (total_loss, _, predicted_labels, log_probs, probabilities) = self.create_model(
                 is_training, input_ids, input_mask, segment_ids, label_ids)
 
-            (assignment_map, initialized_variable_names) \
-                = modeling.get_assignment_map_from_checkpoint(tf.trainable_variables(), self.init_checkpoint)
-            tf.train.init_from_checkpoint(self.init_checkpoint, assignment_map)
+            if self.init_checkpoint:
+                (assignment_map, _) = modeling.get_assignment_map_from_checkpoint(tf.trainable_variables(),
+                                                                                  self.init_checkpoint)
+                tf.train.init_from_checkpoint(self.init_checkpoint, assignment_map)
 
             # Optimize/Predict
             if mode == tf.estimator.ModeKeys.TRAIN:
