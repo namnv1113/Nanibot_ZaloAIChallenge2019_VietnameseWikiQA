@@ -2,13 +2,7 @@
 
 The `filter.py` file contains the source code used to take 25%, 50% and 75% best translated SQuAD-format data based on a score file
 
-## Requirements
-	* Python 3.x (Tested on Python 3.6.7)
-	* tqdm
-	* argparse
-
-
-## Run the code
+**To run the code**
 
 ```sh
 python filter.py -train <train_file> -score <score_file>
@@ -23,14 +17,13 @@ After running, 3 files will be returned `result_25.json`, `result_50.json` and `
 
 This `translate.py` file contains the source code to translate SQuAD training file (from English to Vietnamese)
 
-## Requirements
-	* Python 3.x (Tested on Python 3.6.7)
+**Additional Requirements**
+
 	* copy
 	* html
-	* tqdm
 	* google.cloud (Authentication is required, which is not included in this CD)
 
-## Run the code
+**To run the code**
 
 ```sh
 export GOOGLE_APPLICATION_CREDENTIALS="<path_to_authenticate_file>"
@@ -44,7 +37,7 @@ Along with the output translated file, `error.txt` and `progress.json` are retur
 
 This `convert_squad2zalo_format.py` file contains the source code to convert a dataset (json) file from SQuAD v2.0 format to Zalo-defined format
 
-## Run the code
+**Run the code**
 ```sh
 python convert_squad2zalo_format -i <input_file> -o <output_file> -m <mode>
 ```
@@ -56,4 +49,21 @@ Where
 - `-m` or `--mode` Which conversion mechanism should be used (*'full'* or *'short'*), which determine the `text` label for each question in the Zalo-formatted dataset
 
     - `full`: `text` will be the full `paragraph` in the source SQuAD dataset
-    - `short`: `text` will be the sentence that contains the `answer` in the `paragraph` if the `answer` is present, else, `text` will be 1 or 2 random sentences in the paragraph.
+    - `short`: `text` will get all the possible sentences, where the length of `question` & `text` does not surpass a certain threshold (the sentence that contains the `answer` in the `paragraph` must be present if an answer is present)
+
+- `-s` or `--size` The maximum combined length of 'question' & 'text' allowed (used in mode 'short)    
+
+# Prepare pretrain data
+
+The `extract_wiki_to_pretrain_format.py` file contains the source code to convert a Wikipedia-extracted dump to BERT pretrained data (unprocessed)
+
+**Run the code**
+```sh
+python extract_wiki_to_pretrain_format -i <input_file> -o <output_file>
+```
+
+Where
+- `-i` or `--input_file` The path to the extracted Wikipedia file, each line is a article in json string
+- `-o` or `--output` The desired path to the (unprocessed) output pretrain data
+
+To get the extracted Vietnamese Wikipedia dump, download the [latest dump](https://dumps.wikimedia.org/viwiki/latest/viwiki-latest-pages-articles.xml.bz2), then extract the text with [WikiExtractor.py](https://github.com/attardi/wikiextractor), remember to choose the `--json` flag to match the required input format.

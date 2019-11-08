@@ -2,6 +2,8 @@ import argparse
 import json
 from os.path import exists
 from random import randint
+from tqdm import tqdm
+from underthesea import sent_tokenize
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--input_file', default=None,
@@ -11,7 +13,22 @@ parser.add_argument('-o', '--output_file', default="./out_zalo.json",
 parser.add_argument('-e', '--encoding', default="utf-8",
                     help='The default encoding of the input/output dataset', required=False)
 parser.add_argument('-m', '--mode', default=None, help="The conversion mode (see Readme)", required=True)
+parser.add_argument('-s', '--size', default=180, required=False,
+                    help="The maximum combined length of 'question' & 'text' allowed (used in mode 'short)")
 args = parser.parse_args()
+
+
+def get_word_count(text):
+    # Split by space & remove empty text
+    texts = text.split(' ')
+    try:
+        text_len = len(texts.remove(""))
+    except ValueError:
+        text_len = len(texts)
+    except TypeError:
+        return 0
+
+    return text_len
 
 
 def convert_mode_full(input_file, output_file, encoding):
@@ -27,7 +44,7 @@ def convert_mode_full(input_file, output_file, encoding):
 
     # Converting
     for data in squad['data']:
-        for paragraph in data['paragraphs']:
+        for paragraph in tqdm(data['paragraphs']):
             for qas in paragraph['qas']:
                 convertedData.append({
                     'id': qas['id'],
@@ -53,47 +70,86 @@ def convert_mode_short(input_file, output_file, encoding):
         data['title'] = " ".join(data['title'].split('_'))
 
     # Format 2: Sentence as Text
-    for data in squad['data']:
+    for data in tqdm(squad['data']):
         for paragraph in data['paragraphs']:
+            # Get paragraph split by sentences & determine its start index for easier processing
+            para_context = sent_tokenize(paragraph['context'])  # Context split into list of sentences
+            para_sent_startidxs = [paragraph['context'].index(sentence) for sentence in para_context]
+
+            # Process question-answer pairs
             for qas in paragraph['qas']:
+                # Prepare data to save
                 zaloQAS = {
                     'id': qas['id'],
                     'question': qas['question'],
                     'title': data['title'],
                     'label': False if qas['is_impossible'] else True
                 }
-                if len(qas['answers']) != 0:
-                    for answer in qas['answers']:
-                        skip = answer['answer_start']
-                        foundQuestionMarkIdx = paragraph['context'][skip:].find('?')
-                        foundExclamationMarkIdx = paragraph['context'][skip:].find('!')
-                        foundEllipsisIdx = paragraph['context'][skip:].find('...')
-                        foundDotIdx = paragraph['context'][skip:].find('.')
-                        if foundExclamationMarkIdx != -1:
-                            sentence = paragraph['context'][skip:].split('?')[0] + '!'
-                        if foundQuestionMarkIdx != -1:
-                            sentence = paragraph['context'][skip:].split('?')[0] + '?'
-                        if foundEllipsisIdx != -1:
-                            sentence = paragraph['context'][skip:].split('...')[0] + '...'
-                        elif foundDotIdx != -1:
-                            sentence = paragraph['context'][skip:].split('.')[0] + '.'
-                        if sentence == '.':
-                            sentence = paragraph['context'][skip + 1:].split('.')[0] + '.'
-                        zaloQAS['text'] = sentence
+                _question_len = get_word_count(qas['question'])
+
+                # Loop & get answer text for each qa pair
+                if len(qas['answers']) != 0 or qas['is_impossible'] is False:
+                    # Only 1 answer, but rephrased
+                    answer = qas['answers'][0]
+
+                    # Find the sentence & sentence index that contains the answer
+                    _text = None
+                    _ans_sent_idx = None
+                    for idx in range(len(para_context)):
+                        if para_sent_startidxs[idx] > answer['answer_start']:
+                            continue
+                        elif para_sent_startidxs[idx] < answer['answer_start'] \
+                                < para_sent_startidxs[idx] + len(para_context[idx]):
+                            _text = para_context[idx]
+                            _ans_sent_idx = idx
+                            break
+                        else:
+                            break
+
+                    if _text is None or _ans_sent_idx is None:
+                        # Problem with data --> Ignore & continue
+                        continue
+
+                    # Try to expand the answer text to reach the threshold
+                    _text_len = get_word_count(_text)
+                    _ans_sent_idx_before = _ans_sent_idx - 1
+                    _ans_sent_idx_after = _ans_sent_idx + 1
+                    while True:
+                        if _ans_sent_idx_before >= 0:
+                            _text_before = para_context[_ans_sent_idx_before]
+                            _text_before_len = get_word_count(_text_before)
+                            if _text_len + _text_before_len + _question_len <= args.size:
+                                _text = _text_before + _text
+                                _text_len += _text_before_len
+                            else:
+                                break
+                            _ans_sent_idx_before -= 1
+                        if _ans_sent_idx_after < len(para_context):
+                            _text_after = para_context[_ans_sent_idx_after]
+                            _text_after_len = get_word_count(_text_after)
+                            if _text_len + _text_after_len + _question_len <= args.size:
+                                _text += _text_after
+                                _text_len += _text_after_len
+                            else:
+                                break
+                            _ans_sent_idx_after += 1
+                        if _ans_sent_idx_before < 0 and _ans_sent_idx_after >= len(para_context):
+                            break
+                    zaloQAS['text'] = _text
                 else:
-                    cache = ".".join(paragraph['context'].split('...'))
-                    cache = cache.split('.')
-                    sentences = []
-                    for sentence in cache:
-                        if sentence != '':
-                            sentences.append(sentence)
-                    if sentences[-1] == '':
-                        sentences.pop(-1)
-                    randomSentenceIdx = randint(0, len(sentences) - 1)
-                    randomSentence = sentences[randomSentenceIdx] + "."
-                    if randomSentenceIdx % 2 == 0 and randomSentenceIdx < len(sentences) - 1:
-                        randomSentence += " " + sentences[randomSentenceIdx + 1] + "."
-                    zaloQAS['text'] = randomSentence
+                    # Keep adding text until the threshold is reached
+                    _text = para_context[0]
+                    _text_len = get_word_count(_text)
+                    for idx in range(1, len(para_context)):
+                        _curr_text_len = get_word_count(para_context[idx])
+                        if _text_len + _question_len + _curr_text_len < args.size:
+                            _text += para_context[idx]
+                            _text_len += _curr_text_len
+                        else:
+                            break
+                    zaloQAS['text'] = _text
+
+                # Add data instance
                 convertedData.append(zaloQAS)
 
     # Export converted data
