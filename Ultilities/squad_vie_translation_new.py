@@ -27,10 +27,10 @@ count_ques = 0
 def create_maindriver():
     mainDriver = getattr(threadLocal, 'maindriver', None)
     if mainDriver is None:
-        # chromeOptions = webdriver.ChromeOptions()
-        # chromeOptions.add_argument("--headless")
-        # mainDriver = webdriver.Chrome(chromepath, chrome_options=chromeOptions)
-        mainDriver = webdriver.Chrome(chromepath)
+        chromeOptions = webdriver.ChromeOptions()
+        chromeOptions.add_argument("--headless")
+        mainDriver = webdriver.Chrome(chromepath, chrome_options=chromeOptions)
+        # mainDriver = webdriver.Chrome(chromepath)
         setattr(threadLocal, 'maindriver', mainDriver)
     return mainDriver
 
@@ -46,7 +46,7 @@ def EnVieTranslationAPI(text, driver, wait):
     return translatedText
 
 def load_data():
-    with open(os.path.join(os.path.dirname(__file__), "..","Dataset", "squad_dev_v2.0_ImpossibleAnswers.json"),'r',encoding='utf-8') as infile:
+    with open(os.path.join(os.path.dirname(__file__), "..","Dataset", "squad_train_v2.0_ImpossibleAnswers.json"),'r',encoding='utf-8') as infile:
         squad_json = json.load(infile)
         infile.close()
     #divide data into 4 part
@@ -58,7 +58,7 @@ def load_data():
     divided_squad_json.append([squad_json[i] for i in range(quart*3,len(squad_json))]) 
     return divided_squad_json
 def export_data(json_input):
-  with  open(os.path.join(os.path.dirname(__file__), "..","Dataset", "vie_squad_dev_v2.0_ImpossibleAnswers.json"),'w',encoding='utf-8') as outfile: 
+  with  open(os.path.join(os.path.dirname(__file__), "..","Dataset", "vie_squad_train_v2.0_ImpossibleAnswers.json"),'w',encoding='utf-8') as outfile: 
        json.dump(json_input, outfile, ensure_ascii=False)
        outfile.close()
 def translate_squad_vie(squad_json):
@@ -87,3 +87,4 @@ if __name__ == "__main__":
     start = time.time()
     ThreadPool(4).map(translate_squad_vie,load_data())
     export_data(json_result)
+    print('Time:')
