@@ -2,7 +2,6 @@
 import json
 import os
 import codecs
-import requests
 import time
 import selenium
 from selenium import webdriver
@@ -23,7 +22,8 @@ chromepath = r"chromedriver.exe"
 json_result = []
 count_para = 0
 count_ques = 0
-
+count_error = 0
+text_error = []
 def create_maindriver():
     mainDriver = getattr(threadLocal, 'maindriver', None)
     if mainDriver is None:
@@ -35,14 +35,21 @@ def create_maindriver():
     return mainDriver
 
 def EnVieTranslationAPI(text, driver, wait):
-    input_area = driver.find_element_by_css_selector("#source")
-    input_area.clear()
-    time.sleep(0.8)
-    # driver.execute_script("arguments[0].value = '';", input_area)
-    # driver.execute_script("arguments[0].value = '"+text+"';", input_area)
-    # driver.execute_script("document.getElementById('source').setAttribute('value','"+text+"')")
-    input_area.send_keys(text)
-    translatedText =  wait.until(EC.presence_of_element_located((By.CSS_SELECTOR , 'body > div.frame > div.page.tlid-homepage.homepage.translate-text > div.homepage-content-wrap > div.tlid-source-target.main-header > div.source-target-row > div.tlid-results-container.results-container > div.tlid-result.result-dict-wrapper > div.result.tlid-copy-target > div.text-wrap.tlid-copy-target > div > span.tlid-translation.translation'))).text    
+    global  count_error, text_error
+    try:
+        input_area = driver.find_element_by_css_selector("#source")
+        input_area.clear()
+        time.sleep(0.8)
+        # driver.execute_script("arguments[0].value = '';", input_area)
+        # driver.execute_script("arguments[0].value = '"+text+"';", input_area)
+        # driver.execute_script("document.getElementById('source').setAttribute('value','"+text+"')")
+        input_area.send_keys(text)
+        translatedText =  wait.until(EC.presence_of_element_located((By.CSS_SELECTOR , 'body > div.frame > div.page.tlid-homepage.homepage.translate-text > div.homepage-content-wrap > div.tlid-source-target.main-header > div.source-target-row > div.tlid-results-container.results-container > div.tlid-result.result-dict-wrapper > div.result.tlid-copy-target > div.text-wrap.tlid-copy-target > div > span.tlid-translation.translation'))).text    
+    except Exception as e:
+        print("Exception: ", e)
+        count_error = count_error + 1
+        text_error.append(text_error)
+        return ""
     return translatedText
 
 def load_data():
@@ -50,12 +57,12 @@ def load_data():
         squad_json = json.load(infile)
         infile.close()
     #divide data into 4 part
-    quart = floor(len(squad_json)/4)
+    div = floor(len(squad_json)/15)
     divided_squad_json = []
-    divided_squad_json.append([squad_json[i] for i in range(quart)]) 
-    divided_squad_json.append([squad_json[i] for i in range(quart,quart*2)]) 
-    divided_squad_json.append([squad_json[i] for i in range(quart*2,quart*3)])
-    divided_squad_json.append([squad_json[i] for i in range(quart*3,len(squad_json))]) 
+    divided_squad_json.append([squad_json[i] for i in range(div)])
+    for i in range(1,14):
+        divided_squad_json.append([squad_json[j] for j in range(div*i,div*(i+1))])
+    divided_squad_json.append([squad_json[i] for i in range(div*14,len(squad_json))]) 
     return divided_squad_json
 def export_data(json_input):
   with  open(os.path.join(os.path.dirname(__file__), "..","Dataset", "vie_squad_train_v2.0_ImpossibleAnswers.json"),'w',encoding='utf-8') as outfile: 
@@ -85,6 +92,6 @@ def translate_squad_vie(squad_json):
     
 if __name__ == "__main__":
     start = time.time()
-    ThreadPool(4).map(translate_squad_vie,load_data())
+    ThreadPool(15).map(translate_squad_vie,load_data())
     export_data(json_result)
     print('Time:')
