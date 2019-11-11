@@ -3,4 +3,7 @@ matplotlib
 tqdm
 pandas
 underthesea
-selenium
+# selenium
+# copy
+# html
+# google.cloud
