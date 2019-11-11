@@ -3,3 +3,4 @@ matplotlib
 tqdm
 pandas
 underthesea
+selenium
