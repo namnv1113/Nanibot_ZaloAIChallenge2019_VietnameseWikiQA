@@ -10,9 +10,11 @@ parser.add_argument('-o', '--output_file', default="./pretrain_data.txt",
                     help='The desired output file (BERT pretrained data (unprocessed))', required=False)
 parser.add_argument('-e', '--encoding', default="utf-8",
                     help='The default encoding of the input/output dataset', required=False)
-args = parser.parse_args()
+
 
 if __name__ == "__main__":
+    args = parser.parse_args()
+
     # Read file line by line & convert json string to python dict
     with open(args.input_file, 'r', encoding=args.encoding) as input_file:
         articles = input_file.readlines()

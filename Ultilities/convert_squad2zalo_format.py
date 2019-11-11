@@ -1,7 +1,6 @@
 import argparse
 import json
 from os.path import exists
-from random import randint
 from tqdm import tqdm
 from underthesea import sent_tokenize
 
@@ -15,7 +14,6 @@ parser.add_argument('-e', '--encoding', default="utf-8",
 parser.add_argument('-m', '--mode', default=None, help="The conversion mode (see Readme)", required=True)
 parser.add_argument('-s', '--size', default=180, required=False,
                     help="The maximum combined length of 'question' & 'text' allowed (used in mode 'short)")
-args = parser.parse_args()
 
 
 def get_word_count(text):
@@ -158,6 +156,8 @@ def convert_mode_short(input_file, output_file, encoding):
 
 
 if __name__ == "__main__":
+    args = parser.parse_args()
+
     assert exists(args.input_file), "The input file can't be found"
     assert args.mode.lower() in ['full', 'short'], "The mode can either be 'full' or 'short'"
 

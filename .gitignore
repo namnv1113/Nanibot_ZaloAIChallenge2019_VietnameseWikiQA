@@ -6,6 +6,7 @@
 QASystem/bert/run_squad.py
 QASystem/bert/run_classifier.py
 dataset/*.txt
+*venv/
 
 
 # Created by https://www.gitignore.io/api/python,pycharm+all,visualstudio,jupyternotebooks,visualstudiocode

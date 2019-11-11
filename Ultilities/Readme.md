@@ -15,7 +15,7 @@ After running, 3 files will be returned `result_25.json`, `result_50.json` and `
 
 # SQuAD Translate
 
-This `translate.py` file contains the source code to translate SQuAD training file (from English to Vietnamese)
+The `squad_translate_1.py` file contains the source code to translate SQuAD dataset from English to Vietnamese
 
 **Additional Requirements**
 
@@ -27,10 +27,33 @@ This `translate.py` file contains the source code to translate SQuAD training fi
 
 ```sh
 export GOOGLE_APPLICATION_CREDENTIALS="<path_to_authenticate_file>"
-python translate.py -in <input_file> -out <output_file>
+python squad_translate_1.py -in <input_file> -out <output_file>
 ```
 
+Where: 
+- `-in` or `--input_file` The path to the input SQuAD v1.1 datset that need to be translated
+- `-out` or `--output_file` The desired path where the translated datset should be saved
+- `-e` or `--encoding` The encoding of the input & the desired output dataset
+
 Along with the output translated file, `error.txt` and `progress.json` are returned indicates question-answer pairs with errors that can be processes; and current progress so that the program can be continued after termination.
+
+The `squad_translate_2.py` file contains the source code to translate the **ADDITIONAL** data from SQuAD v2.0 (contains unansweable question) from English to Vietnamese
+
+**Additional Requirements**
+
+	* selenium
+
+**To run the code**
+
+```sh
+python squad_translate_2.py -i <input_file> -o <output_file> -e <encoding> -t <num_threads>
+```
+
+Where: 
+- `-i` or `--input_file` The path to the input additional SQuAD v2.0 datset that need to be translated
+- `-o` or `--output_file` The desired path where the translated datset should be saved
+- `-e` or `--encoding` The encoding of the input & the desired output dataset
+- `t` or `--num_threads` The number of threads the script should run
 
 
 # SQuAD to Zalo format dataset converter
@@ -44,7 +67,7 @@ python convert_squad2zalo_format -i <input_file> -o <output_file> -m <mode>
 
 Where
 - `-i` or `--input_file` The path to the input SQuAD datset that need to be converted
-- `-o` or `--output` The desired path where the output Zalo-formatted datset should be saved
+- `-o` or `--output_file` The desired path where the output Zalo-formatted datset should be saved
 - `-e` or `--encoding` The encoding of the input & the desired output dataset
 - `-m` or `--mode` Which conversion mechanism should be used (*'full'* or *'short'*), which determine the `text` label for each question in the Zalo-formatted dataset
 
