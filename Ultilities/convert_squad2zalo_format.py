@@ -3,6 +3,7 @@ import json
 from os.path import exists
 from tqdm import tqdm
 from underthesea import sent_tokenize
+import random
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--input_file', default=None,
@@ -155,13 +156,72 @@ def convert_mode_short(input_file, output_file, encoding):
         stream.write(json.dumps(convertedData, ensure_ascii=False))
 
 
+def convert_mode_veryshort(input_file, output_file, encoding):
+    with open(input_file, 'r', encoding=encoding) as stream:
+        squad = json.load(stream)
+
+    convertedData = []
+
+    # Remove _ symbol in title
+    for data in squad['data']:
+        data['title'] = " ".join(data['title'].split('_'))
+
+    # Format 2: Sentence as Text
+    for data in tqdm(squad['data']):
+        for paragraph in data['paragraphs']:
+            # Get paragraph split by sentences & determine its start index for easier processing
+            para_context = sent_tokenize(paragraph['context'])  # Context split into list of sentences
+            para_sent_startidxs = [paragraph['context'].index(sentence) for sentence in para_context]
+
+            # Process question-answer pairs
+            for qas in paragraph['qas']:
+                # Prepare data to save
+                zaloQAS = {
+                    'id': qas['id'],
+                    'question': qas['question'],
+                    'title': data['title'],
+                    'label': False if qas['is_impossible'] else True
+                }
+                _question_len = get_word_count(qas['question'])
+
+                # Loop & get answer text for each qa pair
+                if len(qas['answers']) != 0 or qas['is_impossible'] is False:
+                    # Only 1 answer, but rephrased
+                    answer = qas['answers'][0]
+
+                    # Find the sentence & sentence index that contains the answer
+                    _text = None
+                    for idx in range(len(para_context)):
+                        if para_sent_startidxs[idx] > answer['answer_start']:
+                            continue
+                        elif para_sent_startidxs[idx] < answer['answer_start'] \
+                                < para_sent_startidxs[idx] + len(para_context[idx]):
+                            _text = para_context[idx]
+                            break
+                        else:
+                            break
+                    zaloQAS['text'] = "" if _text is None else _text
+                else:
+                    zaloQAS['text'] = para_context[random.randint(0, len(para_context)) - 1] if len(para_context) >= 1 \
+                        else ""
+
+                # Add data instance
+                convertedData.append(zaloQAS)
+
+    # Export converted data
+    with open(output_file, 'w', encoding=encoding) as stream:
+        stream.write(json.dumps(convertedData, ensure_ascii=False))
+
+
 if __name__ == "__main__":
     args = parser.parse_args()
 
     assert exists(args.input_file), "The input file can't be found"
-    assert args.mode.lower() in ['full', 'short'], "The mode can either be 'full' or 'short'"
+    assert args.mode.lower() in ['full', 'short', 'veryshort'], "The mode can either be 'full' or 'short'"
 
     if args.mode.lower() == 'full':
         convert_mode_full(args.input_file, args.output_file, args.encoding)
     elif args.mode.lower() == 'short':
         convert_mode_short(args.input_file, args.output_file, args.encoding)
+    elif args.mode.lower() == 'veryshort':
+        convert_mode_veryshort(args.input_file, args.output_file, args.encoding)

@@ -1,62 +1,39 @@
 import json
-import io
-from tqdm import tqdm
+import pandas as pd
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-train', '--train_file', default="", help='SQuAD-format files that need to be filtered',
+parser.add_argument('-train', '--train_file', default="", help='Zalo-format file that need to be filtered',
                     required=True)
-parser.add_argument('-score', '--score_file', default="", help='Score file, produced using squad_filter.py',
+parser.add_argument('-score', '--score_file', default="", help='Score file, produced using eval mode',
                     required=True)
-args = parser.parse_args()
+parser.add_argument('-top', '--get_top_percentage', default=0.5, help='The percentage of best result to get (0 to 1)')
+parser.add_argument('-output', '--output_file', default='./out.json', help='The desired, filtered output file path')
+parser.add_argument('-e', '--encoding', default="utf-8",
+                    help='The default encoding of the input/output dataset', required=False)
 
 
 def main():
+    args = parser.parse_args()
     original_file = args.train_file
     score_file = args.score_file
 
-    with open(original_file, "r", encoding='utf-8-sig') as data_file:
+    with open(original_file, "r", encoding=args.encoding) as data_file:
         data = json.load(data_file)
 
-    with open(score_file, "r", encoding='utf-8') as data_file:
-        scores = json.load(data_file)
+    # Filter & sort by confidence
+    scores = pd.read_csv(score_file)
+    scores = scores[scores['label'] == scores['prediction']]
+    scores = scores.sort_values(by=['probabilities'], ascending=False)
 
-    ids = []
-    # ids = [value for (key, value) in sorted(scores.items())]
-    for w in sorted(scores, key=scores.get, reverse=True):
-        ids.append(w)
-    ids_25 = ids[0: int(len(ids) * 0.25)]
-    ids_50 = ids[0: int(len(ids) * 0.5)]
-    ids_75 = ids[0: int(len(ids) * 0.75)]
+    # Get top x% best results
+    scores = scores.head(int(len(scores) * args.get_top_percentage))
+    best_ids = scores['guid'].tolist()
+    # Filter training file, store only best result
+    filtered_data = list(filter(lambda item: item['id'] in best_ids, data))
 
-    data_25 = {'data': [{'title': "data25", 'paragraphs': []}]}
-    data_50 = {'data': [{'title': "data50", 'paragraphs': []}]}
-    data_75 = {'data': [{'title': "data75", 'paragraphs': []}]}
-
-    for paragraphs in tqdm(data['data']):
-        for paragraph in tqdm(paragraphs['paragraphs']):
-            qas_25 = []
-            qas_50 = []
-            qas_75 = []
-            for question in paragraph['qas']:
-                if question['id'] in ids_25:
-                    qas_25.append(question)
-                if (question['id'] in ids_50):
-                    qas_50.append(question)
-                if (question['id'] in ids_75):
-                    qas_75.append(question)
-            data_25['data'][0]['paragraphs'].append({'context': paragraph['context'], 'qas': qas_25})
-            data_50['data'][0]['paragraphs'].append({'context': paragraph['context'], 'qas': qas_50})
-            data_75['data'][0]['paragraphs'].append({'context': paragraph['context'], 'qas': qas_75})
-
-    with io.open('result_25.json', "w", encoding='utf-8') as json_file:
-        json.dump(data_25, json_file, ensure_ascii=False)
-
-    with io.open('result_50.json', "w", encoding='utf-8') as json_file:
-        json.dump(data_50, json_file, ensure_ascii=False)
-
-    with io.open('result_75.json', "w", encoding='utf-8') as json_file:
-        json.dump(data_75, json_file, ensure_ascii=False)
+    with open(args.output_file, "w", encoding=args.encoding) as json_file:
+        json.dump(filtered_data, json_file, ensure_ascii=False)
 
 
 if __name__ == "__main__":
