@@ -70,61 +70,89 @@ class ZaloDatasetProcessor(object):
         self.dev_size = dev_size
         self.force_data_balance = force_data_balance
 
-    def load_from_path(self, dataset_path, encode='utf-8', train_filename='train.json', test_filename='test.json'):
+    def load_from_path(self, dataset_path, encode='utf-8', train_filename='train.json', test_filename='test.json',
+                       train_augmented_filename=None):
         """ Load data from file & store into memory
             Need to be called before preprocess(before write_all_to_tfrecords) is called
             :parameter dataset_path: The path to the directory where the dataset is stored
             :parameter encode: The encoding of every dataset file
             :parameter train_filename: The name of the training file
             :parameter test_filename: The name of the test file
+            :parameter train_augmented_filename: The name of the augmented training file
         """
         # Get train data, convert to InputExample
         with open(join(dataset_path, train_filename), 'r', encoding=encode) as train_file:
             train_data = json.load(train_file)
-            train_data_formatted = []
-            train_data_formatted.extend(
+        train_data_formatted = []
+        train_data_formatted.extend(
+            InputExample(guid=data_instance['id'],
+                         question=data_instance['question'],
+                         title=data_instance['title'],
+                         text=data_instance['text'],
+                         label=self.label_list[data_instance['label']])
+            for data_instance in tqdm(train_data)
+        )
+
+        # Divide into train set and dev set while maintain label ratio in each set
+        if self.force_data_balance:
+            min_label_data_size = min([len([data for data in train_data_formatted if data.label == label])
+                                       for label in self.label_list])
+        for label in self.label_list:
+            train_data_by_label = [data for data in train_data_formatted if data.label == label]
+            # Truncate for data balancing
+            if self.force_data_balance:
+                train_data_by_label = train_data_by_label[0:min_label_data_size]
+            # Split to train & dev set
+            random.shuffle(train_data_by_label)
+            _split_location = int(len(train_data_by_label) * self.dev_size)
+            self.dev_data.extend(train_data_by_label[0:_split_location])
+            self.train_data.extend(train_data_by_label[_split_location:-1])
+
+        # Get augmented training data (if any)
+        if train_augmented_filename:
+            with open(join(dataset_path, train_augmented_filename), 'r', encoding=encode) as aug_train_file:
+                train_data_augmented = json.load(aug_train_file)
+            train_data_augmented_formatted = []
+            train_data_augmented_formatted.extend(
                 InputExample(guid=data_instance['id'],
                              question=data_instance['question'],
                              title=data_instance['title'],
                              text=data_instance['text'],
-                             label=self.label_list[data_instance['label']]) for data_instance in tqdm(train_data)
+                             label=self.label_list[data_instance['label']])
+                for data_instance in tqdm(train_data_augmented)
             )
-
-            # Divide into train set and dev set while maintain label ratio in each set
             if self.force_data_balance:
-                min_label_data_size = min([len([data for data in train_data_formatted if data.label == label])
-                                           for label in self.label_list])
+                aug_min_label_data_size = min(
+                    [len([data for data in train_data_augmented_formatted if data.label == label])
+                     for label in self.label_list])
+
             for label in self.label_list:
-                train_data_by_label = [data for data in train_data_formatted if data.label == label]
+                train_data_aug_by_label = [data for data in train_data_augmented_formatted if data.label == label]
                 # Truncate for data balancing
                 if self.force_data_balance:
-                    train_data_by_label = train_data_by_label[0:min_label_data_size]
-                # Split to train & dev set
-                random.shuffle(train_data_by_label)
-                _split_location = int(len(train_data_by_label) * self.dev_size)
-                self.dev_data.extend(train_data_by_label[0:_split_location])
-                self.train_data.extend(train_data_by_label[_split_location:-1])
+                    train_data_aug_by_label = train_data_aug_by_label[0:aug_min_label_data_size]
+                self.train_data.extend(train_data_aug_by_label)
 
-            # Shuffle data
-            random.shuffle(self.train_data)
-            random.shuffle(self.dev_data)
+        # Shuffle data
+        random.shuffle(self.train_data)
+        random.shuffle(self.dev_data)
 
         # Get test data, convert to InputExample
         with open(join(dataset_path, test_filename), 'r', encoding=encode) as test_file:
             test_data = json.load(test_file)
-            for data_instance in tqdm(test_data):
-                self.test_data.extend(
-                    InputExample(guid=data_instance['__id__'] + '$' + paragraph_instance['id'],
-                                 question=data_instance['question'],
-                                 title=data_instance['title'],
-                                 text=paragraph_instance['text'],
-                                 label=None)
-                    for paragraph_instance in data_instance['paragraphs']
-                )
+        for data_instance in tqdm(test_data):
+            self.test_data.extend(
+                InputExample(guid=data_instance['__id__'] + '$' + paragraph_instance['id'],
+                             question=data_instance['question'],
+                             title=data_instance['title'],
+                             text=paragraph_instance['text'],
+                             label=None)
+                for paragraph_instance in data_instance['paragraphs']
+            )
 
     def write_all_to_tfrecords(self, output_folder, tokenier, max_sequence_length,
                                train_filename='train.tfrecords', dev_filename='dev.tfrecords',
-                               test_filename='test.tfrecords', encoding='utf-8'):
+                               test_filename='test.tfrecords', encoding='utf-8', ):
         """ Write data to tfrecords format, prepare for training/testing
             :parameter output_folder: The path to the directory where the preprocessed data are stored
             :parameter tokenier: A BERT-based tokenier to tokenize text

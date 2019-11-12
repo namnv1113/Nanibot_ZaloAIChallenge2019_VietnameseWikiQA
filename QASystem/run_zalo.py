@@ -16,16 +16,25 @@ flags.DEFINE_string("bert_model_path", None,
 flags.DEFINE_string("model_path", None,
                     "Default path to store the trained model")
 
-flags.DEFINE_integer("max_sequence_len", 384,
+flags.DEFINE_string("train_filename", "train.json",
+                    "The name of the training file (stored in the dataset folder)")
+flags.DEFINE_string("train_augmented_filename", None,
+                    "The name of the additional training file with augmented data (stored in the dataset folder)")
+flags.DEFINE_string("test_filename", "test.json",
+                    "The name of the testing file (stored in the dataset folder)")
+flags.DEFINE_string("test_predict_outputmode", "zalo",
+                    "The mode in which the predict file should be (Zalo-defined 'zalo' or full information 'full')")
+
+flags.DEFINE_integer("max_sequence_len", 256,
                      "The maximum input sequence length for embeddings")
 flags.DEFINE_bool("do_lowercase", False,
                   "Whether to lower case the input text. Should be True for uncased "
                   "models and False for cased models.")
-flags.DEFINE_float("model_learning_rate", 2e-5,
+flags.DEFINE_float("model_learning_rate", 1e-5,
                    "The default model learning rate")
-flags.DEFINE_integer("model_batch_size", 3,
+flags.DEFINE_integer("model_batch_size", 16,
                      "Training input batch size")
-flags.DEFINE_integer("train_epochs", 1,
+flags.DEFINE_integer("train_epochs", 3,
                      "Number of loops to train the whole dataset")
 flags.DEFINE_float("train_dropout_rate", 0.1,
                    "Default dropout rate")
@@ -75,9 +84,14 @@ def main(_):
         return False
 
     if not is_preprocessed():
+        assert exists(join(FLAGS.dataset_path, FLAGS.train_filename)), "[FlagsCheck] Training file doesn't exist"
+        assert exists(join(FLAGS.dataset_path, FLAGS.test_filename)), "[FlagsCheck] Test file doesn't exist"
+
         print('[Main] No preprocess data found. Begin preprocess')
         dataset_processor = ZaloDatasetProcessor(dev_size=FLAGS.dev_size, force_data_balance=FLAGS.force_data_balance)
-        dataset_processor.load_from_path(encode=FLAGS.encoding, dataset_path=FLAGS.dataset_path)
+        dataset_processor.load_from_path(encode=FLAGS.encoding, dataset_path=FLAGS.dataset_path,
+                                         train_filename=FLAGS.train_filename, test_filename=FLAGS.test_filename,
+                                         train_augmented_filename=FLAGS.train_augmented_filename)
         dataset_processor.write_all_to_tfrecords(encoding=FLAGS.encoding,
                                                  output_folder=FLAGS.dataset_path,
                                                  tokenier=tokenier,
@@ -133,7 +147,8 @@ def main(_):
                                              file_output_mode='full')
     elif FLAGS.mode.lower() == 'predict_test':
         print("[Main] Begin Predict based on Test file")
-        results = model.predict_from_eval_file(test_file=test_file, output_file=FLAGS.zalo_predict_csv_file)
+        results = model.predict_from_eval_file(test_file=test_file, output_file=FLAGS.zalo_predict_csv_file,
+                                               file_output_mode=FLAGS.test_predict_outputmode)
         print(results)
     elif FLAGS.mode.lower() == 'predict_manual':
         while True:
@@ -150,15 +165,13 @@ def main(_):
     print('[Main] Finished')
 
 
-def flags_check():
+if __name__ == "__main__":
     """ Sanity flags check """
     assert FLAGS.mode.lower() in ['train', 'eval', 'predict_test', 'predict_manual'], \
         "[FlagsCheck] Mode can only be 'train', 'eval', 'predict_test' or 'predict_manual'"
     assert exists(FLAGS.dataset_path), "[FlagsCheck] Dataset path doesn't exist"
     assert exists(FLAGS.bert_model_path), "[FlagsCheck] BERT pretrained model path doesn't exist"
+    assert FLAGS.test_predict_outputmode.lower() in ['full', 'zalo'], "[FlagsCheck] Test file output mode " \
+                                                                      "can only be 'full' or 'zalo'"
     assert FLAGS.model_path is not None, "[FlagsCheck] BERT finetuned model location must be set"
-
-
-if __name__ == "__main__":
-    flags_check()
     tf.compat.v1.app.run()

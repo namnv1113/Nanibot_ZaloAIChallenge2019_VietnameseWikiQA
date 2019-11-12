@@ -136,7 +136,7 @@ def convert_mode_short(input_file, output_file, encoding):
                     zaloQAS['text'] = _text
                 else:
                     # Keep adding text until the threshold is reached
-                    _text = para_context[0]
+                    _text = para_context[0] if len(para_context) >= 1 else ""
                     _text_len = get_word_count(_text)
                     for idx in range(1, len(para_context)):
                         _curr_text_len = get_word_count(para_context[idx])
