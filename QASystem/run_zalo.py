@@ -58,6 +58,8 @@ flags.DEFINE_float("dev_size", 0.2,
                    "The size of the development set taken from the training set")
 flags.DEFINE_bool("force_data_balance", False,
                   "Balance training data by truncate training instance whose label is overwhelming")
+flags.DEFINE_bool("force_aug_data_balance", False,
+                  "Balance training data by balancing the number of handcraft data and augmented data")
 
 
 def main(_):
@@ -88,7 +90,8 @@ def main(_):
         assert exists(join(FLAGS.dataset_path, FLAGS.test_filename)), "[FlagsCheck] Test file doesn't exist"
 
         print('[Main] No preprocess data found. Begin preprocess')
-        dataset_processor = ZaloDatasetProcessor(dev_size=FLAGS.dev_size, force_data_balance=FLAGS.force_data_balance)
+        dataset_processor = ZaloDatasetProcessor(dev_size=FLAGS.dev_size, force_data_balance=FLAGS.force_data_balance,
+                                                 force_aug_data_balance=FLAGS.force_aug_data_balance)
         dataset_processor.load_from_path(encode=FLAGS.encoding, dataset_path=FLAGS.dataset_path,
                                          train_filename=FLAGS.train_filename, test_filename=FLAGS.test_filename,
                                          train_augmented_filename=FLAGS.train_augmented_filename)
