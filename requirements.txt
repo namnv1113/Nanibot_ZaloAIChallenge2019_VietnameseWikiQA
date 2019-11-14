@@ -1,8 +1,10 @@
 tensorflow-gpu==1.11
+bert-tensorflow
 matplotlib
 tqdm
 pandas
 underthesea
+scikit-learn
 # selenium
 # copy
 # html

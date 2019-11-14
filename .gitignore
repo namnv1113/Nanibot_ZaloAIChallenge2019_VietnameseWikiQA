@@ -7,6 +7,7 @@ QASystem/bert/run_squad.py
 QASystem/bert/run_classifier.py
 dataset/*.txt
 *venv/
+dataset/train_augmented.json
 
 
 # Created by https://www.gitignore.io/api/python,pycharm+all,visualstudio,jupyternotebooks,visualstudiocode
@@ -579,4 +580,4 @@ healthchecksdb
 MigrationBackup/
 
 # End of https://www.gitignore.io/api/python,pycharm+all,visualstudio,jupyternotebooks,visualstudiocode
-dataset/train_augmented.json
+
