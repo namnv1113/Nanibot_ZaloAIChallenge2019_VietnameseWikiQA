@@ -31,7 +31,7 @@ Required parameters:
 Optional parameters
 - `--train_filename` The name of the training file that is stored in the dataset folder (Default is *train.json*)
 - `--test_filename` The name of the training file that is stored in the dataset folder (Default is *test.json*)
-- `--test_predict_outputmode` The mode in which the predict file should be (can be either Zalo-defined format *`zalo`* or full format *`full`*) (Default is *zalo*) (*zalo* mode mainly used for submission & full mode is used for test data insight)
+- `--test_predict_outputmode` The mode in which the predict file should be (can be either Zalo-defined format *`zalo`* or full format *`full`*) (Default is *zalo*) (*zalo* mode mainly used for submission on the Zalo test set & full mode is used for test data insight on a dataset with the same format with training data)
 - `--max_sequence_len` The maximum input sequence length for embeddings (Default is *256*)
 - `--do_lowercase` Should the input text be lowercased (this should be the same as the `do_lowercase` settings in the BERT pretrained model)
 - `--model_learning_rate` The default model learning rate (Default is *1e-5*)
@@ -47,4 +47,4 @@ Optional parameters
 - `--eval_predict_csv_file` Destination for the development set predict file during *train* and *eval* (Default is *None*)
 - `--dev_size` The size of the development set taken from the training set (Default is *0.2*)
 - `--force_data_balance` Balance training data by truncate training instance whose label is overwhelming (Default is *False*)
-    
+- `--force_aug_data_balance` Balance the number of handcraft training data & augmented training data   

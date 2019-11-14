@@ -94,7 +94,8 @@ def main(_):
                                                  force_aug_data_balance=FLAGS.force_aug_data_balance)
         dataset_processor.load_from_path(encode=FLAGS.encoding, dataset_path=FLAGS.dataset_path,
                                          train_filename=FLAGS.train_filename, test_filename=FLAGS.test_filename,
-                                         train_augmented_filename=FLAGS.train_augmented_filename)
+                                         train_augmented_filename=FLAGS.train_augmented_filename,
+                                         testfile_mode='zalo' if FLAGS.test_predict_outputmode == 'zalo' else 'normal')
         dataset_processor.write_all_to_tfrecords(encoding=FLAGS.encoding,
                                                  output_folder=FLAGS.dataset_path,
                                                  tokenier=tokenier,

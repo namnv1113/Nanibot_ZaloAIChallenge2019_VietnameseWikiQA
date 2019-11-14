@@ -73,7 +73,9 @@ def convert_mode_short(input_file, output_file, encoding):
         for paragraph in data['paragraphs']:
             # Get paragraph split by sentences & determine its start index for easier processing
             para_context = sent_tokenize(paragraph['context'])  # Context split into list of sentences
-            para_sent_startidxs = [paragraph['context'].index(sentence) for sentence in para_context]
+            para_sent_startidxs = [0]   # Start index of each sentence in the paragraph
+            for idx, sentence in enumerate(para_context[:-1]):
+                para_sent_startidxs.append(para_sent_startidxs[idx] + len(sentence) + 1)
 
             # Process question-answer pairs
             for qas in paragraph['qas']:
@@ -87,26 +89,29 @@ def convert_mode_short(input_file, output_file, encoding):
                 _question_len = get_word_count(qas['question'])
 
                 # Loop & get answer text for each qa pair
-                if len(qas['answers']) != 0 or qas['is_impossible'] is False:
+                if len(qas['answers']) != 0 and qas['is_impossible'] is False \
+                        and qas['answers'][0]['answer_start'] != -1:
                     # Only 1 answer, but rephrased
-                    answer = qas['answers'][0]
+                    answer_start = qas['answers'][0]['answer_start']
 
                     # Find the sentence & sentence index that contains the answer
                     _text = None
                     _ans_sent_idx = None
                     for idx in range(len(para_context)):
-                        if para_sent_startidxs[idx] > answer['answer_start']:
-                            continue
-                        elif para_sent_startidxs[idx] < answer['answer_start'] \
-                                < para_sent_startidxs[idx] + len(para_context[idx]):
+                        curr_start_idx = para_sent_startidxs[idx]
+                        curr_end_idx = curr_start_idx + len(para_context[idx])
+                        if curr_start_idx <= answer_start <= curr_end_idx:
                             _text = para_context[idx]
                             _ans_sent_idx = idx
                             break
-                        else:
+                        elif answer_start < curr_start_idx:
                             break
+                        else:
+                            continue
 
                     if _text is None or _ans_sent_idx is None:
                         # Problem with data --> Ignore & continue
+                        print("Skip due to error")
                         continue
 
                     # Try to expand the answer text to reach the threshold
@@ -117,7 +122,7 @@ def convert_mode_short(input_file, output_file, encoding):
                         if _ans_sent_idx_before >= 0:
                             _text_before = para_context[_ans_sent_idx_before]
                             _text_before_len = get_word_count(_text_before)
-                            if _text_len + _text_before_len + _question_len <= args.size:
+                            if _text_len + _text_before_len + _question_len <= int(args.size):
                                 _text = _text_before + _text
                                 _text_len += _text_before_len
                             else:
@@ -126,7 +131,7 @@ def convert_mode_short(input_file, output_file, encoding):
                         if _ans_sent_idx_after < len(para_context):
                             _text_after = para_context[_ans_sent_idx_after]
                             _text_after_len = get_word_count(_text_after)
-                            if _text_len + _text_after_len + _question_len <= args.size:
+                            if _text_len + _text_after_len + _question_len <= int(args.size):
                                 _text += _text_after
                                 _text_len += _text_after_len
                             else:
@@ -141,7 +146,7 @@ def convert_mode_short(input_file, output_file, encoding):
                     _text_len = get_word_count(_text)
                     for idx in range(1, len(para_context)):
                         _curr_text_len = get_word_count(para_context[idx])
-                        if _text_len + _question_len + _curr_text_len < args.size:
+                        if _text_len + _question_len + _curr_text_len < int(args.size):
                             _text += para_context[idx]
                             _text_len += _curr_text_len
                         else:
@@ -185,7 +190,8 @@ def convert_mode_veryshort(input_file, output_file, encoding):
                 _question_len = get_word_count(qas['question'])
 
                 # Loop & get answer text for each qa pair
-                if len(qas['answers']) != 0 or qas['is_impossible'] is False:
+                if len(qas['answers']) != 0 and qas['is_impossible'] is False \
+                        and qas['answers'][0]['answer_start'] != -1:
                     # Only 1 answer, but rephrased
                     answer = qas['answers'][0]
 
