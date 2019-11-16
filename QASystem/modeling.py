@@ -7,7 +7,7 @@ from preprocess import InputExample, ZaloDatasetProcessor
 
 class BertClassifierModel(object):
     def __init__(self, max_sequence_len, label_list,
-                 learning_rate, batch_size, epochs, dropout_rate, warmup_proportion, use_pooled_output,
+                 learning_rate, batch_size, epochs, dropout_rate, warmup_proportion, fc1_units, use_pooled_output,
                  model_dir, save_checkpoint_steps, save_summary_steps, keep_checkpoint_max, bert_model_path, tokenizer,
                  train_file=None, evaluation_file=None, encoding='utf-8'):
         """ Constructor for BERT model for classification
@@ -18,6 +18,7 @@ class BertClassifierModel(object):
             :parameter epochs (int): Train for how many epochs?
             :parameter dropout_rate (float): The dropout rate of the fully connected layer input
             :parameter warmup_proportion (float): The amount of training steps is used for warmup
+            :parameter fc1_units (int) The number of hidden units in the fully connected layer
             :parameter use_pooled_output (bool): Use pooled output as pretrained-BERT output (or FC input) (True) or
                 using meaned input (False)
             :parameter model_dir (string): Folder path to store the model
@@ -45,6 +46,7 @@ class BertClassifierModel(object):
         self.init_checkpoint = join(bert_model_path, 'bert_model.ckpt')
         self.tokenizer = tokenizer
         self.encoding = encoding
+        self.fc1_units = fc1_units
 
         # Specify outpit directory and number of checkpoint steps to save
         self.run_config = tf.estimator.RunConfig(
@@ -96,14 +98,22 @@ class BertClassifierModel(object):
             # Dropout helps prevent overfitting
             if is_training:
                 output_layer = tf.nn.dropout(output_layer, rate=self.dropout_rate)
-            fc_weights = tf.compat.v1.get_variable("fc_weights", [self.num_labels, hidden_size],
-                                                   initializer=tf.truncated_normal_initializer(stddev=0.02,
-                                                                                               seed=0))
-            fc_bias = tf.compat.v1.get_variable("fc_bias", [self.num_labels],
-                                                initializer=tf.zeros_initializer())
 
-            logits = tf.matmul(output_layer, fc_weights, transpose_b=True)
-            logits = tf.nn.bias_add(logits, fc_bias)
+            fc1_weights = tf.compat.v1.get_variable("fc1_weights", [self.fc1_units, hidden_size],
+                                                    initializer=tf.truncated_normal_initializer(stddev=0.02, seed=0))
+            fc1_bias = tf.compat.v1.get_variable("fc1_bias", [self.fc1_units],
+                                                 initializer=tf.zeros_initializer())
+            fc1_output = tf.matmul(output_layer, fc1_weights, transpose_b=True)
+            fc1_output = tf.nn.bias_add(fc1_output, fc1_bias)
+            fc1_output = tf.nn.relu(fc1_output)
+
+            fc2_weights = tf.compat.v1.get_variable("fc2_weights", [self.num_labels, self.fc1_units],
+                                                    initializer=tf.truncated_normal_initializer(stddev=0.02, seed=0))
+            fc2_bias = tf.compat.v1.get_variable("fc2_bias", [self.num_labels],
+                                                 initializer=tf.zeros_initializer())
+
+            logits = tf.matmul(fc1_output, fc2_weights, transpose_b=True)
+            logits = tf.nn.bias_add(logits, fc2_bias)
             probabilities = tf.nn.softmax(logits, axis=-1)
             log_probs = tf.nn.log_softmax(logits, axis=-1)
 
@@ -331,6 +341,7 @@ class BertClassifierModel(object):
         eval_spec = tf.estimator.EvalSpec(
             input_fn=eval_input_fn,
             steps=self.num_eval_steps,
+            throttle_secs=150
         )
 
         tf.estimator.train_and_evaluate(self.classifier, train_spec, eval_spec)

@@ -66,7 +66,8 @@ flags.DEFINE_bool("force_data_balance", False,
 flags.DEFINE_bool("force_aug_data_balance", False,
                   "Balance training data by balancing the number of handcraft data and augmented data")
 
-
+flags.DEFINE_integer("fc1_units",10,
+                     "Number of hidden units in first fc layer")
 def main(_):
     print("[Main] Starting....")
 
@@ -127,6 +128,7 @@ def main(_):
         train_file=train_file if (FLAGS.mode.lower() == 'train') else None,
         evaluation_file=dev_file,
         encoding=FLAGS.encoding,
+        fc1_units=FLAGS.fc1_units
     )
 
     # Training/Testing
