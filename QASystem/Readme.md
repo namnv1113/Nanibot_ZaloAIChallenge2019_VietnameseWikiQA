@@ -30,6 +30,7 @@ Required parameters:
 
 Optional parameters
 - `--train_filename` The name of the training file that is stored in the dataset folder (Default is *train.json*)
+- `--dev_filename` The name of the development file that is stored in the dataset folder (Default is *None*)
 - `--test_filename` The name of the training file that is stored in the dataset folder (Default is *test.json*)
 - `--test_predict_outputmode` The mode in which the predict file should be (can be either Zalo-defined format *`zalo`* or full format *`full`*) (Default is *zalo*) (*zalo* mode mainly used for submission on the Zalo test set & full mode is used for test data insight on a dataset with the same format with training data)
 - `--max_sequence_len` The maximum input sequence length for embeddings (Default is *256*)
@@ -39,12 +40,13 @@ Optional parameters
 - `--train_epochs` Number of loops to train the whole dataset (Default is *3*)
 - `--train_dropout_rate` Default dropout rate (Default is *0.1*)
 - `--bert_warmup_proportion` Proportion of training to perform linear learning rate warmup (Default is *0.1*)
+- `--use_pooled_output` Set to *True* if use pooled output for pretrained BERT output (or fully connected layer input). Set to *False* to use meaned output instead (Default is *True*) 
 - `--save_checkpoint_steps` The number of steps between each checkpoint save (Default is *500*)
 - `--save_summary_steps` The number of steps between each summary write (Default is *100*)
 - `--keep_checkpoint_max` The maximum number of checkpoints to keep (Default is *1*)
 - `--encoding` The default encoding used in the training dataset (Default set to *utf-8*)
 - `--zalo_predict_csv_file` Destination for the Zalo submission predict file during *predict_test* (Default is *./zalo.csv*)
 - `--eval_predict_csv_file` Destination for the development set predict file during *train* and *eval* (Default is *None*)
-- `--dev_size` The size of the development set taken from the training set (Default is *0.2*)
+- `--dev_size` The size of the development set taken from the training set. If dev_filename exists, this is ignored. (Default is *0.2*)
 - `--force_data_balance` Balance training data by truncate training instance whose label is overwhelming (Default is *False*)
 - `--force_aug_data_balance` Balance the number of handcraft training data & augmented training data   

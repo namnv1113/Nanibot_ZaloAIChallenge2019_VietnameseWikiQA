@@ -7,7 +7,7 @@ from preprocess import InputExample, ZaloDatasetProcessor
 
 class BertClassifierModel(object):
     def __init__(self, max_sequence_len, label_list,
-                 learning_rate, batch_size, epochs, dropout_rate, warmup_proportion,
+                 learning_rate, batch_size, epochs, dropout_rate, warmup_proportion, use_pooled_output,
                  model_dir, save_checkpoint_steps, save_summary_steps, keep_checkpoint_max, bert_model_path, tokenizer,
                  train_file=None, evaluation_file=None, encoding='utf-8'):
         """ Constructor for BERT model for classification
@@ -18,6 +18,8 @@ class BertClassifierModel(object):
             :parameter epochs (int): Train for how many epochs?
             :parameter dropout_rate (float): The dropout rate of the fully connected layer input
             :parameter warmup_proportion (float): The amount of training steps is used for warmup
+            :parameter use_pooled_output (bool): Use pooled output as pretrained-BERT output (or FC input) (True) or
+                using meaned input (False)
             :parameter model_dir (string): Folder path to store the model
             :parameter save_checkpoint_steps (int): The number of steps to save checkpoints
             :parameter save_summary_steps (int): The number of steps to save summary
@@ -36,6 +38,7 @@ class BertClassifierModel(object):
         self.batch_size = batch_size
         self.epochs = epochs
         self.dropout_rate = dropout_rate
+        self.use_pooled_output = use_pooled_output
         self.train_file = train_file
         self.evaluation_file = evaluation_file
         self.bert_configfile = join(bert_model_path, 'bert_config.json')
@@ -80,7 +83,10 @@ class BertClassifierModel(object):
 
         # Use model.get_pooled_output() for classification tasks on an entire sentence.
         # Use model.get_sequence_output() for token-level output.
-        output_layer = bert_module.get_pooled_output()
+        if self.use_pooled_output:
+            output_layer = bert_module.get_pooled_output()
+        else:
+            output_layer = tf.reduce_mean(bert_module.get_sequence_output(), axis=1)
 
         hidden_size = output_layer.shape[-1].value
 
@@ -91,7 +97,8 @@ class BertClassifierModel(object):
             if is_training:
                 output_layer = tf.nn.dropout(output_layer, rate=self.dropout_rate)
             fc_weights = tf.compat.v1.get_variable("fc_weights", [self.num_labels, hidden_size],
-                                                   initializer=tf.truncated_normal_initializer(stddev=0.02))
+                                                   initializer=tf.truncated_normal_initializer(stddev=0.02,
+                                                                                               seed=0))
             fc_bias = tf.compat.v1.get_variable("fc_bias", [self.num_labels],
                                                 initializer=tf.zeros_initializer())
 

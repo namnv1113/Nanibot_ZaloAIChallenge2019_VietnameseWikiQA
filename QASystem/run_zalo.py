@@ -20,6 +20,8 @@ flags.DEFINE_string("train_filename", "train.json",
                     "The name of the training file (stored in the dataset folder)")
 flags.DEFINE_string("train_augmented_filename", None,
                     "The name of the additional training file with augmented data (stored in the dataset folder)")
+flags.DEFINE_string("dev_filename", None,
+                    "The name of the developemt file (stored in the dataset folder)")
 flags.DEFINE_string("test_filename", "test.json",
                     "The name of the testing file (stored in the dataset folder)")
 flags.DEFINE_string("test_predict_outputmode", "zalo",
@@ -40,6 +42,8 @@ flags.DEFINE_float("train_dropout_rate", 0.1,
                    "Default dropout rate")
 flags.DEFINE_float("bert_warmup_proportion", 0.1,
                    "Proportion of training to perform linear learning rate warmup")
+flags.DEFINE_bool("use_pooled_output", True,
+                  "Use pooled output from pretrained BERT. False for using meaned output")
 
 flags.DEFINE_integer("save_checkpoint_steps", 500,
                      "The number of steps between each checkpoint save")
@@ -55,7 +59,8 @@ flags.DEFINE_string("zalo_predict_csv_file", "./zalo.csv",
 flags.DEFINE_string("eval_predict_csv_file", "./eval.csv",
                     "Destination for the development set predict file (None if no output is required)")
 flags.DEFINE_float("dev_size", 0.2,
-                   "The size of the development set taken from the training set")
+                   "The size of the development set taken from the training set"
+                   "If dev_filename exists, this is ignored")
 flags.DEFINE_bool("force_data_balance", False,
                   "Balance training data by truncate training instance whose label is overwhelming")
 flags.DEFINE_bool("force_aug_data_balance", False,
@@ -93,7 +98,8 @@ def main(_):
         dataset_processor = ZaloDatasetProcessor(dev_size=FLAGS.dev_size, force_data_balance=FLAGS.force_data_balance,
                                                  force_aug_data_balance=FLAGS.force_aug_data_balance)
         dataset_processor.load_from_path(encode=FLAGS.encoding, dataset_path=FLAGS.dataset_path,
-                                         train_filename=FLAGS.train_filename, test_filename=FLAGS.test_filename,
+                                         train_filename=FLAGS.train_filename, dev_filename=FLAGS.dev_filename,
+                                         test_filename=FLAGS.test_filename,
                                          train_augmented_filename=FLAGS.train_augmented_filename,
                                          testfile_mode='zalo' if FLAGS.test_predict_outputmode == 'zalo' else 'normal')
         dataset_processor.write_all_to_tfrecords(encoding=FLAGS.encoding,
@@ -111,6 +117,7 @@ def main(_):
         epochs=FLAGS.train_epochs,
         dropout_rate=FLAGS.train_dropout_rate,
         warmup_proportion=FLAGS.bert_warmup_proportion,
+        use_pooled_output=FLAGS.use_pooled_output,
         model_dir=FLAGS.model_path,
         save_checkpoint_steps=FLAGS.save_checkpoint_steps,
         save_summary_steps=FLAGS.save_summary_steps,

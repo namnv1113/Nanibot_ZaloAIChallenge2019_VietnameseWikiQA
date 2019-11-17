@@ -1,10 +1,12 @@
 from tqdm import tqdm
-from os.path import join
+from os.path import join, exists
 import json
 import collections
 import tensorflow as tf
 import random
 import math
+
+random.seed(0)
 
 
 class InputExample(object):
@@ -75,49 +77,70 @@ class ZaloDatasetProcessor(object):
         self.force_data_balance = force_data_balance
         self.force_aug_data_balance = force_aug_data_balance
 
-    def load_from_path(self, dataset_path, encode='utf-8', train_filename='train.json', test_filename='test.json',
+    def load_from_path(self, dataset_path, encode='utf-8',
+                       train_filename=None, dev_filename=None, test_filename=None,
                        train_augmented_filename=None, testfile_mode='zalo'):
         """ Load data from file & store into memory
             Need to be called before preprocess(before write_all_to_tfrecords) is called
             :parameter dataset_path: The path to the directory where the dataset is stored
             :parameter encode: The encoding of every dataset file
             :parameter train_filename: The name of the training file
+            :parameter dev_filename: The name of the development file
             :parameter test_filename: The name of the test file
             :parameter train_augmented_filename: The name of the augmented training file
             :parameter testfile_mode: The format of the test dataset (either 'zalo' or 'normal' (same as train set))
         """
         assert testfile_mode.lower() in ['zalo', 'normal'], "[Preprocess] Test file mode must be 'zalo' or 'normal'"
 
+        def read_to_inputexamples(filepath, encode='utf-8'):
+            """ A helper function that read a json file (Zalo-format) & return a list of InputExample
+                :parameter filepath The source file path
+                :parameter encode The encoding of the source file
+                :returns A list of InputExample for each data instance, order preserved
+            """
+            try:
+                with open(filepath, 'r', encoding=encode) as file:
+                    data = json.load(file)
+                return [InputExample(guid=data_instance['id'],
+                                     question=data_instance['question'],
+                                     title=data_instance['title'],
+                                     text=data_instance['text'],
+                                     label=self.label_list[data_instance['label']])
+                        for data_instance in tqdm(data)]
+            except FileNotFoundError:
+                return []
+
         # Get augmented training data (if any), convert to InputExample
         if train_augmented_filename:
-            with open(join(dataset_path, train_augmented_filename), 'r', encoding=encode) as aug_train_file:
-                train_data_augmented = json.load(aug_train_file)
-            train_data_augmented = [InputExample(guid=data_instance['id'],
-                                                 question=data_instance['question'],
-                                                 title=data_instance['title'],
-                                                 text=data_instance['text'],
-                                                 label=self.label_list[data_instance['label']])
-                                    for data_instance in tqdm(train_data_augmented)]
+            train_data_augmented = read_to_inputexamples(filepath=join(dataset_path, train_augmented_filename),
+                                                         encode=encode)
             random.shuffle(train_data_augmented)
             self.train_data.extend(train_data_augmented)
 
-        # Get train data, convert to InputExample
-        with open(join(dataset_path, train_filename), 'r', encoding=encode) as train_file:
-            train_data = json.load(train_file)
-        train_data = [InputExample(guid=data_instance['id'],
-                                   question=data_instance['question'],
-                                   title=data_instance['title'],
-                                   text=data_instance['text'],
-                                   label=self.label_list[data_instance['label']])
-                      for data_instance in tqdm(train_data)]
+        # Get train data, convert to InputExamples
+        if train_filename is not None:
+            train_data = read_to_inputexamples(filepath=join(dataset_path, train_filename),
+                                               encode=encode)
 
-        _loop = math.floor(len(train_data_augmented) / (len(train_data) * (1 - self.dev_size))) \
+        # Get dev data, convert to InputExample
+        if dev_filename is not None:
+            dev_data = read_to_inputexamples(filepath=join(dataset_path, dev_filename),
+                                             encode=encode)
+            self.dev_data.extend(dev_data)
+
+        # For augmented data balancing (if enabled)
+        _handcraft_dup = math.floor(len(train_data_augmented) / (len(train_data) * (1 - self.dev_size))) \
             if self.force_aug_data_balance else 1
-        _loop = _loop if _loop > 1 else 1
-        _split_location = int(len(train_data) * self.dev_size)
-        self.dev_data.extend(train_data[0:_split_location])
-        for i in range(_loop):
-            self.train_data.extend(train_data[_split_location:-1])
+        _handcraft_dup = _handcraft_dup if _handcraft_dup > 1 else 1
+
+        # Check if development data exists
+        if len(self.dev_data) == 0:
+            # Dev data doesn't exists --> Take dev_size of training data
+            self.dev_data.extend(train_data[::int(1. / self.dev_size)])  # Get x% of train data evenly
+            train_data = [data for data in train_data if data not in self.dev_data]
+
+        for i in range(_handcraft_dup):
+            self.train_data.extend(train_data)
 
         # Balance training data labels (if required)
         if self.force_data_balance:
@@ -130,28 +153,28 @@ class ZaloDatasetProcessor(object):
                 _tmp_train_data.extend(train_data_by_label)
             self.train_data = _tmp_train_data
 
-        # Shuffle data
+        # Shuffle training data
         random.shuffle(self.train_data)
-        random.shuffle(self.dev_data)
 
         # Get test data, convert to InputExample
-        with open(join(dataset_path, test_filename), 'r', encoding=encode) as test_file:
-            test_data = json.load(test_file)
-        if testfile_mode.lower() == 'zalo':
-            for data_instance in tqdm(test_data):
-                self.test_data.extend(InputExample(guid=data_instance['__id__'] + '$' + paragraph_instance['id'],
-                                                   question=data_instance['question'],
-                                                   title=data_instance['title'],
-                                                   text=paragraph_instance['text'],
-                                                   label=None)
-                                      for paragraph_instance in data_instance['paragraphs'])
-        elif testfile_mode.lower() == 'normal':
-            self.test_data = [InputExample(guid=data_instance['id'],
-                                           question=data_instance['question'],
-                                           title=data_instance['title'],
-                                           text=data_instance['text'],
-                                           label=self.label_list[data_instance['label']])
-                              for data_instance in tqdm(test_data)]
+        if test_filename is not None:
+            with open(join(dataset_path, test_filename), 'r', encoding=encode) as test_file:
+                test_data = json.load(test_file)
+            if testfile_mode.lower() == 'zalo':
+                for data_instance in tqdm(test_data):
+                    self.test_data.extend(InputExample(guid=data_instance['__id__'] + '$' + paragraph_instance['id'],
+                                                       question=data_instance['question'],
+                                                       title=data_instance['title'],
+                                                       text=paragraph_instance['text'],
+                                                       label=None)
+                                          for paragraph_instance in data_instance['paragraphs'])
+            elif testfile_mode.lower() == 'normal':
+                self.test_data = [InputExample(guid=data_instance['id'],
+                                               question=data_instance['question'],
+                                               title=data_instance['title'],
+                                               text=data_instance['text'],
+                                               label=self.label_list[data_instance['label']])
+                                  for data_instance in tqdm(test_data)]
 
     def write_all_to_tfrecords(self, output_folder, tokenier, max_sequence_length,
                                train_filename='train.tfrecords', dev_filename='dev.tfrecords',
