@@ -117,7 +117,7 @@ class BertClassifierModel(object):
         # If we're train/eval, compute loss between predicted and actual label
         with tf.compat.v1.variable_scope("fully_connected_loss"):
             # Focal loss
-            per_example_loss = -one_hot_labels * ((1 - probabilities) ** self.focal_loss_gamma) * tf.log(probabilities)
+            per_example_loss = -one_hot_labels * ((1 - probabilities) ** self.focal_loss_gamma) * log_probs
             per_example_loss = tf.reduce_sum(per_example_loss, axis=1)
             loss = tf.reduce_mean(per_example_loss)
 

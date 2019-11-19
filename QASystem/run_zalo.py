@@ -58,7 +58,7 @@ flags.DEFINE_string("encoding", "utf-8",
                     "Encoding used in the dataset")
 flags.DEFINE_string("zalo_predict_csv_file", "./zalo.csv",
                     "Destination for the Zalo submission predict file")
-flags.DEFINE_string("eval_predict_csv_file", "./eval.csv",
+flags.DEFINE_string("eval_predict_csv_file", None,
                     "Destination for the development set predict file (None if no output is required)")
 flags.DEFINE_float("dev_size", 0.2,
                    "The size of the development set taken from the training set"
