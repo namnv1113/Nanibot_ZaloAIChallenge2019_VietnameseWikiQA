@@ -42,6 +42,8 @@ flags.DEFINE_float("bert_warmup_proportion", 0.1,
                    "Proportion of training to perform linear learning rate warmup")
 flags.DEFINE_bool("use_pooled_output", True,
                   "Use pooled output from pretrained BERT. False for using meaned output")
+flags.DEFINE_float("focal_loss_gamma", 2,
+                   "A hyperparameter for focal loss")
 
 flags.DEFINE_integer("save_checkpoint_steps", 500,
                      "The number of steps between each checkpoint save")
@@ -54,16 +56,11 @@ flags.DEFINE_string("encoding", "utf-8",
                     "Encoding used in the dataset")
 flags.DEFINE_string("zalo_predict_csv_file", "./zalo.csv",
                     "Destination for the Zalo submission predict file")
-flags.DEFINE_string("eval_predict_csv_file", "./eval.csv",
+flags.DEFINE_string("eval_predict_csv_file", None,
                     "Destination for the development set predict file (None if no output is required)")
 flags.DEFINE_float("dev_size", 0.2,
                    "The size of the development set taken from the training set"
                    "If dev_filename exists, this is ignored")
-flags.DEFINE_bool("force_data_balance", False,
-                  "Balance training data by truncate training instance whose label is overwhelming")
-flags.DEFINE_bool("force_aug_data_balance", False,
-                  "Balance training data by balancing the number of handcraft data and augmented data")
-
 
 def main(_):
     print("[Main] Starting....")
@@ -74,7 +71,7 @@ def main(_):
 
     # Data initialization
     train_file = join(FLAGS.dataset_path, "train.tfrecords")
-    dev_file = join(FLAGS.dataset_path, "dev.tfrecords")
+    dev_file = join(FLAGS.dataset_path, "train.tfrecords")
     test_file = join(FLAGS.dataset_path, "test.tfrecords")
 
     def is_preprocessed():
@@ -93,8 +90,7 @@ def main(_):
         assert exists(join(FLAGS.dataset_path, FLAGS.test_filename)), "[FlagsCheck] Test file doesn't exist"
 
         print('[Main] No preprocess data found. Begin preprocess')
-        dataset_processor = ZaloDatasetProcessor(dev_size=FLAGS.dev_size, force_data_balance=FLAGS.force_data_balance,
-                                                 force_aug_data_balance=FLAGS.force_aug_data_balance)
+        dataset_processor = ZaloDatasetProcessor(dev_size=FLAGS.dev_size)
         dataset_processor.load_from_path(encode=FLAGS.encoding, dataset_path=FLAGS.dataset_path,
                                          train_filename=FLAGS.train_filename, dev_filename=FLAGS.dev_filename,
                                          test_filename=FLAGS.test_filename,
@@ -115,6 +111,7 @@ def main(_):
         epochs=FLAGS.train_epochs,
         warmup_proportion=FLAGS.bert_warmup_proportion,
         use_pooled_output=FLAGS.use_pooled_output,
+        focal_loss_gamma=FLAGS.focal_loss_gamma,
         model_dir=FLAGS.model_path,
         save_checkpoint_steps=FLAGS.save_checkpoint_steps,
         save_summary_steps=FLAGS.save_summary_steps,
