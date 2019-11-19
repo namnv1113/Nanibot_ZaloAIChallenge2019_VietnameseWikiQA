@@ -62,20 +62,14 @@ class ZaloDatasetProcessor(object):
     """ Base class to process & store input data for the Zalo AI Challenge dataset"""
     label_list = ['False', 'True']
 
-    def __init__(self, dev_size=0.2, force_data_balance=False, force_aug_data_balance=False):
+    def __init__(self, dev_size=0.2):
         """ ZaloDatasetProcessor constructor
             :parameter dev_size: The size of the development set taken from the training set
-            :parameter force_data_balance: Balance training data by truncate training instance
-                        whose label is overwhelming
-            :parameter force_aug_data_balance: Balance training data by balance the number of hand-craft training data
-                        and augmented training data
         """
         self.train_data = []
         self.dev_data = []
         self.test_data = []
         self.dev_size = dev_size
-        self.force_data_balance = force_data_balance
-        self.force_aug_data_balance = force_aug_data_balance
 
     def load_from_path(self, dataset_path, encode='utf-8',
                        train_filename=None, dev_filename=None, test_filename=None,
@@ -121,37 +115,17 @@ class ZaloDatasetProcessor(object):
         if train_filename is not None:
             train_data = read_to_inputexamples(filepath=join(dataset_path, train_filename),
                                                encode=encode)
-
         # Get dev data, convert to InputExample
         if dev_filename is not None:
             dev_data = read_to_inputexamples(filepath=join(dataset_path, dev_filename),
                                              encode=encode)
             self.dev_data.extend(dev_data)
-
-        # For augmented data balancing (if enabled)
-        _handcraft_dup = math.floor(len(train_data_augmented) / (len(train_data) * (1 - self.dev_size))) \
-            if self.force_aug_data_balance else 1
-        _handcraft_dup = _handcraft_dup if _handcraft_dup > 1 else 1
-
         # Check if development data exists
         if len(self.dev_data) == 0:
             # Dev data doesn't exists --> Take dev_size of training data
             self.dev_data.extend(train_data[::int(1. / self.dev_size)])  # Get x% of train data evenly
             train_data = [data for data in train_data if data not in self.dev_data]
-
-        for i in range(_handcraft_dup):
-            self.train_data.extend(train_data)
-
-        # Balance training data labels (if required)
-        if self.force_data_balance:
-            min_label_datasize = min([len([data for data in self.train_data if data.label == label])
-                                      for label in self.label_list])
-            _tmp_train_data = []
-            for label in self.label_list:
-                train_data_by_label = [data for data in self.train_data if data.label == label]
-                train_data_by_label = train_data_by_label[0:min_label_datasize]
-                _tmp_train_data.extend(train_data_by_label)
-            self.train_data = _tmp_train_data
+        self.train_data.extend(train_data)
 
         # Shuffle training data
         random.shuffle(self.train_data)

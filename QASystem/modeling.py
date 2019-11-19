@@ -7,7 +7,8 @@ from preprocess import InputExample, ZaloDatasetProcessor
 
 class BertClassifierModel(object):
     def __init__(self, max_sequence_len, label_list,
-                 learning_rate, batch_size, epochs, dropout_rate, warmup_proportion, use_pooled_output,
+                 learning_rate, batch_size, epochs, dropout_rate,
+                 warmup_proportion, use_pooled_output, focal_loss_gamma,
                  model_dir, save_checkpoint_steps, save_summary_steps, keep_checkpoint_max, bert_model_path, tokenizer,
                  train_file=None, evaluation_file=None, encoding='utf-8'):
         """ Constructor for BERT model for classification
@@ -20,6 +21,7 @@ class BertClassifierModel(object):
             :parameter warmup_proportion (float): The amount of training steps is used for warmup
             :parameter use_pooled_output (bool): Use pooled output as pretrained-BERT output (or FC input) (True) or
                 using meaned input (False)
+            :parameter focal_loss_gamma (float): Hyperparamter for focal loss
             :parameter model_dir (string): Folder path to store the model
             :parameter save_checkpoint_steps (int): The number of steps to save checkpoints
             :parameter save_summary_steps (int): The number of steps to save summary
@@ -39,6 +41,7 @@ class BertClassifierModel(object):
         self.epochs = epochs
         self.dropout_rate = dropout_rate
         self.use_pooled_output = use_pooled_output
+        self.focal_loss_gamma = focal_loss_gamma
         self.train_file = train_file
         self.evaluation_file = evaluation_file
         self.bert_configfile = join(bert_model_path, 'bert_config.json')
@@ -113,9 +116,12 @@ class BertClassifierModel(object):
 
         # If we're train/eval, compute loss between predicted and actual label
         with tf.compat.v1.variable_scope("fully_connected_loss"):
-            per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
+            # Focal loss
+            per_example_loss = -one_hot_labels * ((1 - probabilities) ** self.focal_loss_gamma) * tf.log(probabilities)
+            per_example_loss = tf.reduce_sum(per_example_loss, axis=1)
             loss = tf.reduce_mean(per_example_loss)
-            return loss, per_example_loss, predicted_labels, log_probs, probabilities
+
+        return loss, predicted_labels, log_probs, probabilities
 
     def model_fn_builder(self):
         """ Returns `model_fn` closure for Estimator. """
@@ -136,7 +142,7 @@ class BertClassifierModel(object):
 
             # Pass through model
             is_training = (mode == tf.estimator.ModeKeys.TRAIN)
-            (total_loss, _, predicted_labels, log_probs, probabilities) = self.create_model(
+            (total_loss, predicted_labels, log_probs, probabilities) = self.create_model(
                 is_training, input_ids, input_mask, segment_ids, label_ids)
 
             (assignment_map, initialized_variable_names) \
