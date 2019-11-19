@@ -38,7 +38,6 @@ Optional parameters
 - `--model_learning_rate` The default model learning rate (Default is *1e-5*)
 - `--model_batch_size` Training batch size (Default is *16*)
 - `--train_epochs` Number of loops to train the whole dataset (Default is *3*)
-- `--train_dropout_rate` Default dropout rate (Default is *0.1*)
 - `--bert_warmup_proportion` Proportion of training to perform linear learning rate warmup (Default is *0.1*)
 - `--use_pooled_output` Set to *True* if use pooled output for pretrained BERT output (or fully connected layer input). Set to *False* to use meaned output instead (Default is *True*) 
 - `--save_checkpoint_steps` The number of steps between each checkpoint save (Default is *500*)

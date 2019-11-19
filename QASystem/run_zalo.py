@@ -38,8 +38,6 @@ flags.DEFINE_integer("model_batch_size", 16,
                      "Training input batch size")
 flags.DEFINE_integer("train_epochs", 3,
                      "Number of loops to train the whole dataset")
-flags.DEFINE_float("train_dropout_rate", 0.1,
-                   "Default dropout rate")
 flags.DEFINE_float("bert_warmup_proportion", 0.1,
                    "Proportion of training to perform linear learning rate warmup")
 flags.DEFINE_bool("use_pooled_output", True,
@@ -66,8 +64,7 @@ flags.DEFINE_bool("force_data_balance", False,
 flags.DEFINE_bool("force_aug_data_balance", False,
                   "Balance training data by balancing the number of handcraft data and augmented data")
 
-flags.DEFINE_integer("fc1_units",10,
-                     "Number of hidden units in first fc layer")
+
 def main(_):
     print("[Main] Starting....")
 
@@ -116,7 +113,6 @@ def main(_):
         learning_rate=FLAGS.model_learning_rate,
         batch_size=FLAGS.model_batch_size,
         epochs=FLAGS.train_epochs,
-        dropout_rate=FLAGS.train_dropout_rate,
         warmup_proportion=FLAGS.bert_warmup_proportion,
         use_pooled_output=FLAGS.use_pooled_output,
         model_dir=FLAGS.model_path,
@@ -128,7 +124,6 @@ def main(_):
         train_file=train_file if (FLAGS.mode.lower() == 'train') else None,
         evaluation_file=dev_file,
         encoding=FLAGS.encoding,
-        fc1_units=FLAGS.fc1_units
     )
 
     # Training/Testing

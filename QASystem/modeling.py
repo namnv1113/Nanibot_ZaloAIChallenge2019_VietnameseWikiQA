@@ -7,7 +7,7 @@ from preprocess import InputExample, ZaloDatasetProcessor
 
 class BertClassifierModel(object):
     def __init__(self, max_sequence_len, label_list,
-                 learning_rate, batch_size, epochs, dropout_rate, warmup_proportion, fc1_units, use_pooled_output,
+                 learning_rate, batch_size, epochs, warmup_proportion, use_pooled_output,
                  model_dir, save_checkpoint_steps, save_summary_steps, keep_checkpoint_max, bert_model_path, tokenizer,
                  train_file=None, evaluation_file=None, encoding='utf-8'):
         """ Constructor for BERT model for classification
@@ -16,9 +16,7 @@ class BertClassifierModel(object):
             :parameter learning_rate (float): Initial learning rate
             :parameter batch_size (int): Batch size
             :parameter epochs (int): Train for how many epochs?
-            :parameter dropout_rate (float): The dropout rate of the fully connected layer input
             :parameter warmup_proportion (float): The amount of training steps is used for warmup
-            :parameter fc1_units (int) The number of hidden units in the fully connected layer
             :parameter use_pooled_output (bool): Use pooled output as pretrained-BERT output (or FC input) (True) or
                 using meaned input (False)
             :parameter model_dir (string): Folder path to store the model
@@ -38,7 +36,6 @@ class BertClassifierModel(object):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epochs = epochs
-        self.dropout_rate = dropout_rate
         self.use_pooled_output = use_pooled_output
         self.train_file = train_file
         self.evaluation_file = evaluation_file
@@ -46,7 +43,6 @@ class BertClassifierModel(object):
         self.init_checkpoint = join(bert_model_path, 'bert_model.ckpt')
         self.tokenizer = tokenizer
         self.encoding = encoding
-        self.fc1_units = fc1_units
 
         # Specify outpit directory and number of checkpoint steps to save
         self.run_config = tf.estimator.RunConfig(
@@ -85,37 +81,40 @@ class BertClassifierModel(object):
 
         # Use model.get_pooled_output() for classification tasks on an entire sentence.
         # Use model.get_sequence_output() for token-level output.
-        if self.use_pooled_output:
-            output_layer = bert_module.get_pooled_output()
-        else:
-            output_layer = tf.reduce_mean(bert_module.get_sequence_output(), axis=1)
+        final_hidden = bert_module.get_sequence_output()
 
-        hidden_size = output_layer.shape[-1].value
+        final_hidden_shape = modeling.get_shape_list(final_hidden, expected_rank=3)
+        batch_size = final_hidden_shape[0]
+        seq_length = final_hidden_shape[1]
+        hidden_size = final_hidden_shape[2]
 
-        # Create a fully connected layer on top of BERT for classification
-        # Create our own layer to tune for politeness data.
-        with tf.compat.v1.variable_scope("fully_connected"):
-            # Dropout helps prevent overfitting
-            if is_training:
-                output_layer = tf.nn.dropout(output_layer, rate=self.dropout_rate)
+        with tf.compat.v1.variable_scope("fully_connected_1"):
+            fc1_weights = tf.get_variable("fc1_weights", [2, hidden_size],
+                                          initializer=tf.truncated_normal_initializer(stddev=0.02, seed=0))
+            fc1_bias = tf.get_variable("fc1_bias", [2], initializer=tf.zeros_initializer())
 
-            fc1_weights = tf.compat.v1.get_variable("fc1_weights", [self.fc1_units, hidden_size],
-                                                    initializer=tf.truncated_normal_initializer(stddev=0.02, seed=0))
-            fc1_bias = tf.compat.v1.get_variable("fc1_bias", [self.fc1_units],
-                                                 initializer=tf.zeros_initializer())
-            fc1_output = tf.matmul(output_layer, fc1_weights, transpose_b=True)
-            fc1_output = tf.nn.bias_add(fc1_output, fc1_bias)
-            fc1_output = tf.nn.relu(fc1_output)
+            final_hidden_matrix = tf.reshape(final_hidden, [batch_size * seq_length, hidden_size])
+            fc1_logits = tf.matmul(final_hidden_matrix, fc1_weights, transpose_b=True)
+            fc1_logits = tf.nn.bias_add(fc1_logits, fc1_bias)
+            fc1_logits = tf.nn.relu(fc1_logits)
 
-            fc2_weights = tf.compat.v1.get_variable("fc2_weights", [self.num_labels, self.fc1_units],
+            fc1_logits = tf.reshape(fc1_logits, [batch_size, seq_length, 2])
+            fc1_logits = tf.transpose(fc1_logits, [2, 0, 1])
+
+            _unstacked = tf.unstack(fc1_logits, axis=0)
+            (start_logits, end_logits) = (_unstacked[0], _unstacked[1])
+            fc1_logits = tf.concat([start_logits, end_logits], axis=1)
+
+        with tf.compat.v1.variable_scope("fully_connected_2"):
+            fc1_hidden_shape = fc1_logits.shape[-1].value
+            fc2_weights = tf.compat.v1.get_variable("fc2_weights", [self.num_labels, fc1_hidden_shape],
                                                     initializer=tf.truncated_normal_initializer(stddev=0.02, seed=0))
             fc2_bias = tf.compat.v1.get_variable("fc2_bias", [self.num_labels],
                                                  initializer=tf.zeros_initializer())
-
-            logits = tf.matmul(fc1_output, fc2_weights, transpose_b=True)
-            logits = tf.nn.bias_add(logits, fc2_bias)
-            probabilities = tf.nn.softmax(logits, axis=-1)
-            log_probs = tf.nn.log_softmax(logits, axis=-1)
+            fc2_logits = tf.matmul(fc1_logits, fc2_weights, transpose_b=True)
+            fc2_logits = tf.nn.bias_add(fc2_logits, fc2_bias)
+            probabilities = tf.nn.softmax(fc2_logits, axis=-1)
+            log_probs = tf.nn.log_softmax(fc2_logits, axis=-1)
 
             # Convert labels into one-hot encoding
             one_hot_labels = tf.one_hot(labels, depth=self.num_labels, dtype=tf.float32)
