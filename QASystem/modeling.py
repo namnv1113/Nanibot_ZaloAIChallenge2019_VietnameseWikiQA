@@ -151,10 +151,7 @@ class BertClassifierModel(object):
             loss = tf.reduce_mean(per_example_loss)
 
         return loss, predicted_labels, probabilities
-
-    def _calculate_loss(self):
-        pass
-
+    
     def model_fn_builder(self):
         """ Returns `model_fn` closure for Estimator. """
 
