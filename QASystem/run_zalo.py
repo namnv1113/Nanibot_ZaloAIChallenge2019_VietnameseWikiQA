@@ -44,8 +44,14 @@ flags.DEFINE_float("bert_warmup_proportion", 0.1,
                    "Proportion of training to perform linear learning rate warmup")
 flags.DEFINE_bool("use_pooled_output", True,
                   "Use pooled output from pretrained BERT. False for using meaned output")
-flags.DEFINE_float("focal_loss_gamma", 2,
-                   "A hyperparameter for focal loss")
+
+flags.DEFINE_string("loss_type", "cross_entropy",
+                    "The default loss function to use during training (Can be *cross_entropy* or *focal_loss*")
+flags.DEFINE_float("loss_label_smooth", 0,
+                   "Float in [0, 1] to perform label smoothing when calculate loss. "
+                   "When 0, no smoothing occurs. When positive, the binary"
+                   "ground truth labels `y_true` are squeezed toward 0.5, with larger values"
+                   "of `label_smoothing` leading to label values closer to 0.5.")
 
 flags.DEFINE_integer("save_checkpoint_steps", 500,
                      "The number of steps between each checkpoint save")
@@ -64,6 +70,7 @@ flags.DEFINE_float("dev_size", 0.2,
                    "The size of the development set taken from the training set"
                    "If dev_filename exists, this is ignored")
 
+
 def main(_):
     print("[Main] Starting....")
 
@@ -73,7 +80,7 @@ def main(_):
 
     # Data initialization
     train_file = join(FLAGS.dataset_path, "train.tfrecords")
-    dev_file = join(FLAGS.dataset_path, "train.tfrecords")
+    dev_file = join(FLAGS.dataset_path, "dev.tfrecords")
     test_file = join(FLAGS.dataset_path, "test.tfrecords")
 
     def is_preprocessed():
@@ -94,8 +101,8 @@ def main(_):
         print('[Main] No preprocess data found. Begin preprocess')
         dataset_processor = ZaloDatasetProcessor(dev_size=FLAGS.dev_size)
         dataset_processor.load_from_path(encode=FLAGS.encoding, dataset_path=FLAGS.dataset_path,
-                                         train_filename=FLAGS.train_filename, dev_filename=FLAGS.dev_filename,
-                                         test_filename=FLAGS.test_filename,
+                                         train_filename=FLAGS.train_filename, test_filename=FLAGS.test_filename,
+                                         dev_filename=FLAGS.dev_filename,
                                          train_augmented_filename=FLAGS.train_augmented_filename,
                                          testfile_mode='zalo' if FLAGS.test_predict_outputmode == 'zalo' else 'normal')
         dataset_processor.write_all_to_tfrecords(encoding=FLAGS.encoding,
@@ -114,7 +121,8 @@ def main(_):
         dropout_rate=FLAGS.train_dropout_rate,
         warmup_proportion=FLAGS.bert_warmup_proportion,
         use_pooled_output=FLAGS.use_pooled_output,
-        focal_loss_gamma=FLAGS.focal_loss_gamma,
+        loss_type=FLAGS.loss_type,
+        loss_label_smooth=FLAGS.loss_label_smooth,
         model_dir=FLAGS.model_path,
         save_checkpoint_steps=FLAGS.save_checkpoint_steps,
         save_summary_steps=FLAGS.save_summary_steps,
@@ -182,4 +190,6 @@ if __name__ == "__main__":
     assert FLAGS.test_predict_outputmode.lower() in ['full', 'zalo'], "[FlagsCheck] Test file output mode " \
                                                                       "can only be 'full' or 'zalo'"
     assert FLAGS.model_path is not None, "[FlagsCheck] BERT finetuned model location must be set"
+    assert FLAGS.loss_type.lower() in ['cross_entropy', 'focal_loss', 'kld', 'squared_hinge', 'hinge'],\
+        "[FlagsCheck] Incorrect loss function used"
     tf.compat.v1.app.run()

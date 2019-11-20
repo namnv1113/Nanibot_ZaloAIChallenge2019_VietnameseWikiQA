@@ -71,36 +71,48 @@ class ZaloDatasetProcessor(object):
         self.test_data = []
         self.dev_size = dev_size
 
-    def load_from_path(self, dataset_path, encode='utf-8',
-                       train_filename=None, dev_filename=None, test_filename=None,
-                       train_augmented_filename=None, testfile_mode='zalo'):
+    def load_from_path(self, dataset_path, train_filename, test_filename, dev_filename=None,
+                       train_augmented_filename=None, testfile_mode='zalo', encode='utf-8',):
         """ Load data from file & store into memory
             Need to be called before preprocess(before write_all_to_tfrecords) is called
             :parameter dataset_path: The path to the directory where the dataset is stored
-            :parameter encode: The encoding of every dataset file
             :parameter train_filename: The name of the training file
-            :parameter dev_filename: The name of the development file
             :parameter test_filename: The name of the test file
+            :parameter dev_filename: The name of the development file
             :parameter train_augmented_filename: The name of the augmented training file
             :parameter testfile_mode: The format of the test dataset (either 'zalo' or 'normal' (same as train set))
+            :parameter encode: The encoding of every dataset file
         """
-        assert testfile_mode.lower() in ['zalo', 'normal'], "[Preprocess] Test file mode must be 'zalo' or 'normal'"
+        testfile_mode = testfile_mode.lower()
+        assert testfile_mode in ['zalo', 'normal'], "[Preprocess] Test file mode must be 'zalo' or 'normal'"
 
-        def read_to_inputexamples(filepath, encode='utf-8'):
+        def read_to_inputexamples(filepath, encode='utf-8', mode='normal'):
             """ A helper function that read a json file (Zalo-format) & return a list of InputExample
                 :parameter filepath The source file path
                 :parameter encode The encoding of the source file
+                :parameter mode Return data for training ('normal') or for submission ('zalo')
                 :returns A list of InputExample for each data instance, order preserved
             """
             try:
                 with open(filepath, 'r', encoding=encode) as file:
                     data = json.load(file)
-                return [InputExample(guid=data_instance['id'],
-                                     question=data_instance['question'],
-                                     title=data_instance['title'],
-                                     text=data_instance['text'],
-                                     label=self.label_list[data_instance['label']])
-                        for data_instance in tqdm(data)]
+                if mode == 'zalo':
+                    returned = []
+                    for data_instance in tqdm(data):
+                        returned.extend(InputExample(guid=data_instance['__id__'] + '$' + paragraph_instance['id'],
+                                                     question=data_instance['question'],
+                                                     title=data_instance['title'],
+                                                     text=paragraph_instance['text'],
+                                                     label=None)
+                                        for paragraph_instance in data_instance['paragraphs'])
+                    return returned
+                else:  # mode == 'normal'
+                    return [InputExample(guid=data_instance['id'],
+                                         question=data_instance['question'],
+                                         title=data_instance['title'],
+                                         text=data_instance['text'],
+                                         label=self.label_list[data_instance['label']])
+                            for data_instance in tqdm(data)]
             except FileNotFoundError:
                 return []
 
@@ -112,6 +124,7 @@ class ZaloDatasetProcessor(object):
             self.train_data.extend(train_data_augmented)
 
         # Get train data, convert to InputExamples
+        train_data = []
         if train_filename is not None:
             train_data = read_to_inputexamples(filepath=join(dataset_path, train_filename),
                                                encode=encode)
@@ -132,23 +145,9 @@ class ZaloDatasetProcessor(object):
 
         # Get test data, convert to InputExample
         if test_filename is not None:
-            with open(join(dataset_path, test_filename), 'r', encoding=encode) as test_file:
-                test_data = json.load(test_file)
-            if testfile_mode.lower() == 'zalo':
-                for data_instance in tqdm(test_data):
-                    self.test_data.extend(InputExample(guid=data_instance['__id__'] + '$' + paragraph_instance['id'],
-                                                       question=data_instance['question'],
-                                                       title=data_instance['title'],
-                                                       text=paragraph_instance['text'],
-                                                       label=None)
-                                          for paragraph_instance in data_instance['paragraphs'])
-            elif testfile_mode.lower() == 'normal':
-                self.test_data = [InputExample(guid=data_instance['id'],
-                                               question=data_instance['question'],
-                                               title=data_instance['title'],
-                                               text=data_instance['text'],
-                                               label=self.label_list[data_instance['label']])
-                                  for data_instance in tqdm(test_data)]
+            test_data = read_to_inputexamples(filepath=join(dataset_path, test_filename),
+                                              encode=encode, mode=testfile_mode)
+            self.test_data.extend(test_data)
 
     def write_all_to_tfrecords(self, output_folder, tokenier, max_sequence_length,
                                train_filename='train.tfrecords', dev_filename='dev.tfrecords',
