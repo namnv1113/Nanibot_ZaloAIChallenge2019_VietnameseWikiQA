@@ -41,6 +41,8 @@ Optional parameters
 - `--train_dropout_rate` Default dropout rate (Default is *0.1*)
 - `--bert_warmup_proportion` Proportion of training to perform linear learning rate warmup (Default is *0.1*)
 - `--use_pooled_output` Set to *True* if use pooled output for pretrained BERT output (or fully connected layer input). Set to *False* to use meaned output instead (Default is *True*) 
+- `--loss_type` The default loss function to use when training (Can be *cross_entropy*, *focal_loss*, *hinge*, *squared_hinge* or *kld*) (default is *cross_entropy*)
+- `--loss_label_smooth` A hyperparameter for doing label smoothing when calculating loss (in [0, 1]). When 0, no smoothing occurs. When positive, the binary ground truth labels `y_true` are squeezed toward 0.5, with larger values of `label_smoothing` leading to label values closer to 0.5. (Default is *0*)
 - `--save_checkpoint_steps` The number of steps between each checkpoint save (Default is *500*)
 - `--save_summary_steps` The number of steps between each summary write (Default is *100*)
 - `--keep_checkpoint_max` The maximum number of checkpoints to keep (Default is *1*)

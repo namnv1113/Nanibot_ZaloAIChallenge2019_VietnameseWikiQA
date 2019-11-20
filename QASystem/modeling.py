@@ -2,12 +2,14 @@ import tensorflow as tf
 from bert import optimization, modeling
 from os.path import join
 import pandas as pd
+import math
 from preprocess import InputExample, ZaloDatasetProcessor
 
 
 class BertClassifierModel(object):
     def __init__(self, max_sequence_len, label_list,
-                 learning_rate, batch_size, epochs, dropout_rate, warmup_proportion, use_pooled_output,
+                 learning_rate, batch_size, epochs, dropout_rate,
+                 warmup_proportion, use_pooled_output, loss_type, loss_label_smooth,
                  model_dir, save_checkpoint_steps, save_summary_steps, keep_checkpoint_max, bert_model_path, tokenizer,
                  train_file=None, evaluation_file=None, encoding='utf-8'):
         """ Constructor for BERT model for classification
@@ -20,6 +22,12 @@ class BertClassifierModel(object):
             :parameter warmup_proportion (float): The amount of training steps is used for warmup
             :parameter use_pooled_output (bool): Use pooled output as pretrained-BERT output (or FC input) (True) or
                 using meaned input (False)
+            :parameter loss_type (string): The default loss function used during training
+            :parameter loss_label_smooth (float): Perform label smoothing when calculate loss.
+                (0 <= loss_label_smooth <= 1)
+                When 0, no smoothing occurs. When positive, the binary
+                ground truth labels `y_true` are squeezed toward 0.5, with larger values
+                of `label_smoothing` leading to label values closer to 0.5.
             :parameter model_dir (string): Folder path to store the model
             :parameter save_checkpoint_steps (int): The number of steps to save checkpoints
             :parameter save_summary_steps (int): The number of steps to save summary
@@ -39,6 +47,8 @@ class BertClassifierModel(object):
         self.epochs = epochs
         self.dropout_rate = dropout_rate
         self.use_pooled_output = use_pooled_output
+        self.loss_type = loss_type.lower()
+        self.loss_label_smooth = loss_label_smooth
         self.train_file = train_file
         self.evaluation_file = evaluation_file
         self.bert_configfile = join(bert_model_path, 'bert_config.json')
@@ -99,24 +109,49 @@ class BertClassifierModel(object):
             fc_weights = tf.compat.v1.get_variable("fc_weights", [self.num_labels, hidden_size],
                                                    initializer=tf.truncated_normal_initializer(stddev=0.02,
                                                                                                seed=0))
+            # Bias with initialized value = -log((1-r)/r) with r = 0.01 for focal loss trick
             fc_bias = tf.compat.v1.get_variable("fc_bias", [self.num_labels],
-                                                initializer=tf.zeros_initializer())
+                                                initializer=tf.constant_initializer(value=math.log((1 - 0.01) / 0.01))
+                                                if self.loss_type == 'focal_loss' else tf.zeros_initializer())
 
             logits = tf.matmul(output_layer, fc_weights, transpose_b=True)
             logits = tf.nn.bias_add(logits, fc_bias)
             probabilities = tf.nn.softmax(logits, axis=-1)
             log_probs = tf.nn.log_softmax(logits, axis=-1)
 
-            # Convert labels into one-hot encoding
-            one_hot_labels = tf.one_hot(labels, depth=self.num_labels, dtype=tf.float32)
-            predicted_labels = tf.argmax(log_probs, axis=-1, output_type=tf.int32)
+            predicted_labels = tf.argmax(probabilities, axis=-1, output_type=tf.int32)
 
         # If we're train/eval, compute loss between predicted and actual label
         with tf.compat.v1.variable_scope("fully_connected_loss"):
-            per_example_loss = -tf.reduce_sum(one_hot_labels * log_probs, axis=-1)
-            loss = tf.reduce_mean(per_example_loss)
-            return loss, per_example_loss, predicted_labels, log_probs, probabilities
+            one_hot_labels = tf.one_hot(labels, depth=self.num_labels,
+                                        dtype=tf.float32)  # Convert labels into one-hot encoding
+            one_hot_labels_smooth = one_hot_labels * (1.0 - self.loss_label_smooth) + \
+                                    (self.loss_label_smooth / self.num_labels)
 
+            if self.loss_type == 'focal_loss':
+                # Focal loss (Set default focal loss gamma to 2)
+                per_example_loss = -one_hot_labels_smooth * ((1 - probabilities) ** 2) * log_probs
+                per_example_loss = tf.reduce_sum(per_example_loss, axis=1)
+            elif self.loss_type == 'cross_entropy':
+                per_example_loss = tf.compat.v2.metrics.categorical_crossentropy(y_true=one_hot_labels,
+                                                                                 y_pred=probabilities,
+                                                                                 label_smoothing=self.loss_label_smooth)
+            elif self.loss_type == 'kld':
+                per_example_loss = tf.compat.v2.metrics.kld(y_true=one_hot_labels_smooth,
+                                                            y_pred=probabilities)
+            elif self.loss_type == 'squared_hinge':
+                per_example_loss = tf.compat.v2.metrics.squared_hinge(y_true=one_hot_labels_smooth,
+                                                                      y_pred=probabilities)
+            elif self.loss_type == 'hinge':
+                per_example_loss = tf.compat.v2.metrics.hinge(y_true=one_hot_labels_smooth,
+                                                              y_pred=probabilities)
+            else:   # Fallback to cross-entropy
+                per_example_loss = -tf.reduce_sum(one_hot_labels_smooth * log_probs, axis=-1)
+
+            loss = tf.reduce_mean(per_example_loss)
+
+        return loss, predicted_labels, probabilities
+    
     def model_fn_builder(self):
         """ Returns `model_fn` closure for Estimator. """
 
@@ -128,15 +163,12 @@ class BertClassifierModel(object):
             input_mask = features["input_mask"]
             segment_ids = features["segment_ids"]
             label_ids = features["label_ids"]
-            is_real_example = None
-            if "is_real_example" in features:
-                is_real_example = tf.cast(features["is_real_example"], dtype=tf.float32)
-            else:
-                is_real_example = tf.ones(tf.shape(label_ids), dtype=tf.float32)
+            is_real_example = tf.cast(features["is_real_example"], dtype=tf.float32) if "is_real_example" in features \
+                else tf.ones(tf.shape(label_ids), dtype=tf.float32)
 
             # Pass through model
             is_training = (mode == tf.estimator.ModeKeys.TRAIN)
-            (total_loss, _, predicted_labels, log_probs, probabilities) = self.create_model(
+            (total_loss, predicted_labels, probabilities) = self.create_model(
                 is_training, input_ids, input_mask, segment_ids, label_ids)
 
             (assignment_map, initialized_variable_names) \
@@ -157,14 +189,36 @@ class BertClassifierModel(object):
                     accuracy = tf.compat.v1.metrics.accuracy(labels=label_ids,
                                                              predictions=predicted_labels,
                                                              weights=is_real_example)
-                    f1_score = tf.contrib.metrics.f1_score(label_ids, predicted_labels)
-                    recall = tf.compat.v1.metrics.recall(label_ids, predicted_labels)
-                    precision = tf.compat.v1.metrics.precision(label_ids, predicted_labels)
+                    f1_score = tf.contrib.metrics.f1_score(labels=label_ids,
+                                                           predictions=predicted_labels,
+                                                           weights=is_real_example)
+                    recall = tf.compat.v1.metrics.recall(labels=label_ids,
+                                                         predictions=predicted_labels,
+                                                         weights=is_real_example)
+                    precision = tf.compat.v1.metrics.precision(labels=label_ids,
+                                                               predictions=predicted_labels,
+                                                               weights=is_real_example)
+                    true_pos = tf.compat.v1.metrics.true_positives(labels=label_ids,
+                                                                   predictions=predicted_labels,
+                                                                   weights=is_real_example)
+                    true_neg = tf.compat.v1.metrics.true_negatives(labels=label_ids,
+                                                                   predictions=predicted_labels,
+                                                                   weights=is_real_example)
+                    false_pos = tf.compat.v1.metrics.false_positives(labels=label_ids,
+                                                                     predictions=predicted_labels,
+                                                                     weights=is_real_example)
+                    false_neg = tf.compat.v1.metrics.false_negatives(labels=label_ids,
+                                                                     predictions=predicted_labels,
+                                                                     weights=is_real_example)
                     return {
                         "accuracy": accuracy,
                         "f1_score": f1_score,
                         "recall": recall,
-                        "precision": precision
+                        "precision": precision,
+                        "true_positives": true_pos,
+                        "true_negatives": true_neg,
+                        "false_positives": false_pos,
+                        "false_negatives": false_neg,
                     }
 
                 eval_metrics = metric_fn(label_ids, predicted_labels, is_real_example)
@@ -331,6 +385,7 @@ class BertClassifierModel(object):
         eval_spec = tf.estimator.EvalSpec(
             input_fn=eval_input_fn,
             steps=self.num_eval_steps,
+            throttle_secs=60,
         )
 
         tf.estimator.train_and_evaluate(self.classifier, train_spec, eval_spec)
@@ -393,7 +448,8 @@ class BertClassifierModel(object):
             :parameter file_output_mode: Can be 'full' for full information on csv file, or 'zalo' for Zalo-defined
             :returns results (Dataframe): Prediction results
         """
-        assert file_output_mode.lower() in ['full', 'zalo'], "[Predict] File output mode can only be 'full' or 'zalo'"
+        file_output_mode = file_output_mode.lower()
+        assert file_output_mode in ['full', 'zalo'], "[Predict] File output mode can only be 'full' or 'zalo'"
 
         if not test_file:
             return
@@ -418,7 +474,7 @@ class BertClassifierModel(object):
             results.append(_dict)
 
         if output_file:
-            if file_output_mode.lower() == 'zalo':
+            if file_output_mode == 'zalo':
                 trueonly_results = []
                 for result in results:
                     if result['prediction'] == 'True':
@@ -431,7 +487,7 @@ class BertClassifierModel(object):
 
                 trueonly_results_dataframe = pd.DataFrame.from_records(trueonly_results)
                 trueonly_results_dataframe.to_csv(path_or_buf=output_file, encoding=self.encoding, index=False)
-            elif file_output_mode.lower() == 'full':
+            elif file_output_mode == 'full':
                 results_dataframe = pd.DataFrame.from_records(results)
                 results_dataframe.to_csv(path_or_buf=output_file, encoding=self.encoding, index=False)
 
