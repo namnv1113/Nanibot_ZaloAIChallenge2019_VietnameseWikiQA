@@ -1,10 +1,5 @@
 # Question Answering System
 
-## Requirements
-	* Python 3.x (Tested on Python 3.6.7)
-	* flask
-	* tensorflow==1.11 (or tensorflow-gpu==1.11)
-
 ## How to run
 This system required a **multilingual pre-training model**: the *multi_cased* (BERT-Base, Multilingual Cased) model for Vietnamese NLP tasks, which are stored in the `model` folder. Note that I didn't include the pretraining code for the BERT model, but if you want to pre-train your model, you can follow the instructions in this [link](https://github.com/google-research/bert#pre-training-with-bert). The model can be download in the [BERT github page](https://github.com/google-research/bert#pre-trained-models). 
 
@@ -50,5 +45,3 @@ Optional parameters
 - `--zalo_predict_csv_file` Destination for the Zalo submission predict file during *predict_test* (Default is *./zalo.csv*)
 - `--eval_predict_csv_file` Destination for the development set predict file during *train* and *eval* (Default is *None*)
 - `--dev_size` The size of the development set taken from the training set. If dev_filename exists, this is ignored. (Default is *0.2*)
-- `--force_data_balance` Balance training data by truncate training instance whose label is overwhelming (Default is *False*)
-- `--force_aug_data_balance` Balance the number of handcraft training data & augmented training data   
