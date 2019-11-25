@@ -1,1 +1,1 @@
-python /model/run_zalo.py --mode predict_test --dataset_path /data --bert_model_path /model/pretrained --model_path /model/finetuned \--test_filename test.json --zalo_predict_csv_file ./submission.csv
+python3 /model/run_zalo.py --mode predict_test --dataset_path /data/ --bert_model_path /model/pretrained/ --model_path /model/finetuned/ --test_filename test.json --zalo_predict_csv_file /result/submission.csv

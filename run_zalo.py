@@ -16,13 +16,13 @@ flags.DEFINE_string("bert_model_path", None,
 flags.DEFINE_string("model_path", None,
                     "Default path to store the trained model")
 
-flags.DEFINE_string("train_filename", "train.json",
+flags.DEFINE_string("train_filename", None,
                     "The name of the training file (stored in the dataset folder)")
 flags.DEFINE_string("train_augmented_filename", None,
                     "The name of the additional training file with augmented data (stored in the dataset folder)")
 flags.DEFINE_string("dev_filename", None,
                     "The name of the developemt file (stored in the dataset folder)")
-flags.DEFINE_string("test_filename", "test.json",
+flags.DEFINE_string("test_filename", None,
                     "The name of the testing file (stored in the dataset folder)")
 flags.DEFINE_string("test_predict_outputmode", "zalo",
                     "The mode in which the predict file should be (Zalo-defined 'zalo' or full information 'full')")

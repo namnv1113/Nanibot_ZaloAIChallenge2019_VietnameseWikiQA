@@ -1,3 +1,4 @@
+tensorflow-gpu
 bert-tensorflow
 tqdm
 pandas

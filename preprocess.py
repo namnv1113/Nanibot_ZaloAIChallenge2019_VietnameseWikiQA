@@ -117,7 +117,7 @@ class ZaloDatasetProcessor(object):
                 return []
 
         # Get augmented training data (if any), convert to InputExample
-        if train_augmented_filename:
+        if train_augmented_filename and exists(join(dataset_path, train_augmented_filename)):
             train_data_augmented = read_to_inputexamples(filepath=join(dataset_path, train_augmented_filename),
                                                          encode=encode)
             random.shuffle(train_data_augmented)
@@ -128,8 +128,10 @@ class ZaloDatasetProcessor(object):
         if train_filename is not None:
             train_data = read_to_inputexamples(filepath=join(dataset_path, train_filename),
                                                encode=encode)
+            print("[Preprocess] Train data OK")
+            
         # Get dev data, convert to InputExample
-        if dev_filename is not None:
+        if dev_filename is not None and exists(join(dataset_path, dev_filename)):
             dev_data = read_to_inputexamples(filepath=join(dataset_path, dev_filename),
                                              encode=encode)
             self.dev_data.extend(dev_data)
@@ -144,10 +146,11 @@ class ZaloDatasetProcessor(object):
         random.shuffle(self.train_data)
 
         # Get test data, convert to InputExample
-        if test_filename is not None:
+        if test_filename is not None and exists(join(dataset_path, test_filename)):
             test_data = read_to_inputexamples(filepath=join(dataset_path, test_filename),
                                               encode=encode, mode=testfile_mode)
             self.test_data.extend(test_data)
+            print("[Preprocess] Test data OK")
 
     def write_all_to_tfrecords(self, output_folder, tokenier, max_sequence_length,
                                train_filename='train.tfrecords', dev_filename='dev.tfrecords',
