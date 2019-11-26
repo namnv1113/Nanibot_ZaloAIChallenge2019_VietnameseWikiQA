@@ -10,7 +10,7 @@ BERT_BASE_PATH='./model/multi_cased'
 DATASET_PATH='../dataset/'
 OUT_DIR='./finetuned/classifier/'
 
-!python run_zalo.py \
+python run_zalo.py \
     --mode [train/eval/predict_test/predict_manual] \
     --dataset_path $DATASET_PATH \
     --bert_model_path $BERT_BASE_PATH \

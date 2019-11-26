@@ -5,7 +5,4 @@ tqdm
 pandas
 underthesea
 scikit-learn
-# selenium
-# copy
-# html
-# google.cloud
+
