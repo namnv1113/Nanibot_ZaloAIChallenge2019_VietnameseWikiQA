@@ -22,8 +22,8 @@ Details on how to train/predict using the model is described [here](https://gith
 ## What we have tried
 
 - [x] Apply BERT as baseline for the [QA problem defined by Zalo](https://challenge.zalo.ai/portal/question-answering)
-- [x] Data augmented using the [SQuAD dataset](https://rajpurkar.github.io/SQuAD-explorer/) by translating & [de-noising](www.lrec-conf.org/proceedings/lrec2018/pdf/711.pdf)
-- [x] Improve BERT by trying different approaches ([BERT + TextCNN](https://github.com/phateopera/Nanibot_ZaloAIChallenge2019_VietnameseWikiQA/tree/bert_and_textcnn), [BERT with additional fully-connected layer](https://github.com/phateopera/Nanibot_ZaloAIChallenge2019_VietnameseWikiQA/tree/add_fc1)), but yeild no improvements
+- [x] Data augmented using the [SQuAD dataset](https://rajpurkar.github.io/SQuAD-explorer/) by translating & [de-noising](www.lrec-conf.org/proceedings/lrec2018/pdf/711.pdf), resulted in 1% F1 boost compared to the baseline model
+- [x] Improve BERT by trying different approaches ([BERT + TextCNN](https://github.com/phateopera/Nanibot_ZaloAIChallenge2019_VietnameseWikiQA/tree/bert_and_textcnn), BERT with additional fully-connected layer [(1)](https://github.com/phateopera/Nanibot_ZaloAIChallenge2019_VietnameseWikiQA/tree/add_fc1), [(2)](https://github.com/phateopera/Nanibot_ZaloAIChallenge2019_VietnameseWikiQA/tree/add_fc1_squad_based)), but yeild no improvements
 - [x] Try different loss function for the classification problem ((Squared) Hinge loss, KLD loss & Focal loss) along with label smoothing, but yeild no improvements
 - [ ] Data augmented using backtranslation
 - [ ] Apply [multilligual RoBERTa](https://github.com/pytorch/fairseq/tree/master/examples/xlmr) for the problem

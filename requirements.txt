@@ -1,4 +1,4 @@
-tensorflow-gpu==1.11
+tensorflow-gpu
 bert-tensorflow
 matplotlib
 tqdm
