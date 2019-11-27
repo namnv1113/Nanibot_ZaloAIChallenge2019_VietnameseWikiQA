@@ -67,7 +67,7 @@ This `convert_squad2zalo_format.py` file contains the source code to convert a d
 
 **Run the code**
 ```sh
-python convert_squad2zalo_format -i <input_file> -o <output_file> -m <mode>
+python convert_squad2zalo_format.py -i <input_file> -o <output_file> -m <mode>
 ```
 
 Where
@@ -88,7 +88,7 @@ The `extract_wiki_to_pretrain_format.py` file contains the source code to conver
 
 **Run the code**
 ```sh
-python extract_wiki_to_pretrain_format -i <input_file> -o <output_file>
+python extract_wiki_to_pretrain_format.py -i <input_file> -o <output_file>
 ```
 
 Where
@@ -96,3 +96,19 @@ Where
 - `-o` or `--output` The desired path to the (unprocessed) output pretrain data
 
 To get the extracted Vietnamese Wikipedia dump, download the [latest dump](https://dumps.wikimedia.org/viwiki/latest/viwiki-latest-pages-articles.xml.bz2), then extract the text with [WikiExtractor.py](https://github.com/attardi/wikiextractor), remember to choose the `--json` flag to match the required input format.
+
+# Backtranslation
+
+This `dab.py` file contains the source code to generate paraphrases from a Zalo-defined dataset (json) using backtranslation
+
+**Run the code**
+```sh
+python dab.py -i <input_file> -o <output_file>/
+```
+
+Where
+- `-i` or `--input_file` The path to the input Zalo-defined datset that need to be paraphrased
+- `-o` or `--output_file` The desired path where the output Zalo-formatted datset should be saved
+- `-l` or `--inter_lang` The "middle" language used for backtranslation
+- `-t` or `--num_threads` The number of threads used
+- `-e` or `--encoding` The encoding of the input & the desired output dataset
